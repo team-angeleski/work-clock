@@ -172,7 +172,11 @@ final class Board {
     private func syncIfDue() {
         guard joined else { return }
         let every: TimeInterval = store?.mode == .running ? 120 : 300
-        if Date().timeIntervalSince(lastSyncAttempt) >= every { Task { await sync() } }
+        let since = Date().timeIntervalSince(lastSyncAttempt)
+        // Check in just before 9am and 1pm: the server only credits bonus time it saw before the cut-off.
+        let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        let cutoff = (c.hour == 8 || c.hour == 12) && c.minute == 59 && since > 45
+        if since >= every || cutoff { Task { await sync() } }
     }
 
     /// Sync now (start, stop, wake) so friends see the live dot quickly.
@@ -186,7 +190,8 @@ final class Board {
                 "p_member": memberID?.uuidString, "p_secret": secret?.uuidString,
                 "p_day": Self.day(), "p_seconds": Int(store.today), "p_score": Int(store.todayScore),
                 "p_level": store.level, "p_streak": store.streak,
-                "p_focusing": store.mode == .running && store.onTask])
+                "p_focusing": store.mode == .running && store.onTask,
+                "p_tz_minutes": TimeZone.current.secondsFromGMT() / 60])
             let s = try JSONDecoder().decode(BoardState.self, from: data)
             friends = s.members
             code = s.code

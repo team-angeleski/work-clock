@@ -221,6 +221,18 @@ grant execute on function public.focus_create(text, text), public.focus_join(tex
   public.focus_taunt(uuid, uuid, uuid, text, date),
   public.focus_seen(uuid, uuid, uuid), public.focus_leave(uuid, uuid) to anon;
 
+-- ── Hardening (applied after the first version) ─────────────────────────────
+-- Bonus points must be earned in time the server actually saw:
+--   early bird only for focus added before 9am local, the clean-morning 30 only after 1pm local
+--   and only once a real hour was logged before 1pm. Time zone is locked at the first check-in.
+
+alter table focusboard.members add column tz_minutes int check (tz_minutes between -720 and 840);
+alter table focusboard.days add column early_ok int not null default 0;
+alter table focusboard.days add column morning_ok int not null default 0;
+drop function public.focus_sync(uuid, uuid, date, int, int, int, int, boolean);
+-- public.focus_sync(…, p_tz_minutes int) is then recreated; see the live definition with:
+--   select pg_get_functiondef('public.focus_sync(uuid,uuid,date,int,int,int,int,boolean,int)'::regprocedure);
+
 -- To remove the whole board:
 --   drop function public.focus_create, public.focus_join, public.focus_sync,
 --     public.focus_taunt, public.focus_seen, public.focus_leave;

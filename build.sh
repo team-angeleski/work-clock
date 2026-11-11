@@ -40,6 +40,11 @@ PLIST
 
 # Sign with the developer identity if there is one, so the Accessibility
 # permission survives rebuilds. Otherwise sign ad hoc.
-IDENTITY=$(security find-identity -p codesigning -v 2>/dev/null | awk -F'"' '/Apple Development/ {print $2; exit}')
+# RELEASE=1 signs anonymously (ad hoc) so the public download carries no personal certificate.
+IDENTITY=""
+if [[ -z "${RELEASE:-}" ]]; then
+  IDENTITY=$(security find-identity -p codesigning -v 2>/dev/null | awk -F'"' '/Apple Development/ {print $2; exit}')
+fi
 codesign --force --sign "${IDENTITY:--}" "$APP"
+if [[ -n "${RELEASE:-}" ]]; then (cd build && rm -f WorkClock.zip && ditto -c -k --keepParent WorkClock.app WorkClock.zip); fi
 echo "Built $APP"
