@@ -43,11 +43,6 @@ struct PillView: View {
                                 .font(.system(size: h * 0.15, weight: .bold))
                                 .foregroundStyle(.yellow)
                         }
-                        if store.boosted {
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: h * 0.16, weight: .bold))
-                                .foregroundStyle(.yellow)
-                        }
                         if store.multiplier > 1 {
                             Text("×\(Int(store.multiplier))")
                                 .font(.system(size: h * 0.16, weight: .heavy, design: .rounded))
@@ -124,23 +119,15 @@ struct PillView: View {
         case .picking: return store.pickingSet.isEmpty ? "Click your apps" : "Tap to start"
         case .running:
             if !store.onTask { return store.offReason.map { "Off task · \($0)" } ?? "Off task" }
-            // Take turns every 4s: the race, flow or early bird, and the next drop teaser.
-            let race = board.raceLine
-            let slot = (Int(store.now.timeIntervalSince1970) / 4) % (race == nil ? 2 : 3)
-            if slot == 2, let race { return race }
-            if slot == 1 {
-                let r = store.dropRemaining
-                return "Next drop " + (r < 60 ? "\(Int(r))s" : "\(Int(r / 60) + 1)m")
-            }
-            if store.boosted { return "2× XP active" }
+            // Take turns every 4s: the race, then flow or early bird.
+            if let race = board.raceLine, (Int(store.now.timeIntervalSince1970) / 4) % 2 == 1 { return race }
             if store.earlyBird { return "Early bird ×1.5" }
             return store.comboMinutes > 0 ? "In flow \(store.comboMinutes)m" : "Focusing"
         }
     }
 
     private var subtitleStyle: AnyShapeStyle {
-        if store.flash != nil { return AnyShapeStyle(store.flashRarity?.color ?? .orange) }
-        if store.boosted && store.mode == .running { return AnyShapeStyle(.yellow) }
+        if store.flash != nil { return AnyShapeStyle(.orange) }
         if store.mode == .idle && store.todayPercentile < 40 { return AnyShapeStyle(.red.opacity(0.85)) }
         if store.mode == .running && !store.onTask { return AnyShapeStyle(.red.opacity(0.9)) }
         return AnyShapeStyle(.secondary)
@@ -366,58 +353,6 @@ struct TodayBar: View {
     }
 }
 
-extension Rarity {
-    var color: Color {
-        switch self {
-        case .common: Color(white: 0.85)
-        case .rare: Color(red: 0.35, green: 0.65, blue: 1)
-        case .epic: Color(red: 0.75, green: 0.45, blue: 1)
-        case .legendary: Color(red: 1, green: 0.8, blue: 0.2)
-        }
-    }
-}
-
-struct LootRow: View {
-    let store: Store
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Loot").font(.system(.headline, design: .rounded))
-                Spacer()
-                Text(store.boosted ? "2× XP active" : "Next drop in \(Int(store.dropRemaining / 60) + 1)m")
-                    .font(.caption)
-                    .foregroundStyle(store.boosted ? AnyShapeStyle(.yellow) : AnyShapeStyle(.secondary))
-            }
-            GeometryReader { g in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.primary.opacity(0.08))
-                    Capsule().fill(LinearGradient(colors: [Rarity.rare.color, Rarity.epic.color],
-                                                  startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(6, g.size.width * store.dropProgress / store.dropEvery))
-                }
-            }
-            .frame(height: 5)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], alignment: .leading, spacing: 6) {
-                ForEach(Rarity.allCases, id: \.self) { r in
-                    HStack(spacing: 4) {
-                        Circle().fill(r.color).frame(width: 7, height: 7)
-                        Text("\(store.drops[r.rawValue] ?? 0)").monospacedDigit().fontWeight(.semibold)
-                        Text(r.title).foregroundStyle(.secondary)
-                    }
-                    .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Capsule().fill(r.color.opacity(0.12)))
-                }
-            }
-            Text("A random drop every 10 focused minutes. 2% are Legendary: +100 XP and 2× XP for 15m.")
-                .font(.caption2).foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
 // MARK: How you compare
 
 struct CompareCard: View {
@@ -628,7 +563,6 @@ struct DetailView: View {
             FriendsSection(board: board, store: store)
             CompareCard(store: store)
             levelBar
-            LootRow(store: store)
             VStack(alignment: .leading, spacing: 8) {
                 Text("Last 7 days").font(.caption).foregroundStyle(.secondary)
                 WeekBars(store: store, height: 56, showValues: true)
@@ -751,7 +685,7 @@ struct FriendsMini: View {
                     Text(line).font(.caption.weight(.semibold)).foregroundStyle(board.leading ? .green : .orange)
                 }
             }
-            ForEach(Array(board.friends.enumerated()), id: \.element.id) { i, f in
+            ForEach(Array(board.ranked.enumerated()), id: \.element.id) { i, f in
                 FriendRow(board: board, rank: i + 1, friend: f, compact: true)
             }
         }
@@ -856,7 +790,7 @@ struct FriendsSection: View {
                     .font(.system(.title3, design: .rounded).weight(.heavy))
                     .foregroundStyle(board.leading ? AnyShapeStyle(.green.gradient) : AnyShapeStyle(.orange.gradient))
             }
-            ForEach(Array(board.friends.enumerated()), id: \.element.id) { i, f in
+            ForEach(Array(board.ranked.enumerated()), id: \.element.id) { i, f in
                 FriendRow(board: board, rank: i + 1, friend: f)
             }
             if board.tauntsLeft > 0 && !board.others.isEmpty { tauntBox } else if board.friends.count > 1 {

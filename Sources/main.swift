@@ -174,6 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         RunLoop.main.add(timer, forMode: .common)
         hotKey = HotKey { [weak self] in self?.store.quickToggle() }
         board.onShowTaunt = { [weak self] taunt in self?.showTaunt(taunt) }
+        if board.joined { Board.askForNotifications() }
 
         // A friend who installed from an invite lands straight on the join form.
         if board.inviteCode != nil && !board.joined {
@@ -255,7 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         p.alphaValue = 0
         p.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { $0.duration = 0.3; p.animator().alphaValue = 1 }
-        store.announce("\(taunt.from_name) taunted you", sound: nil, seconds: 6)
+        store.announce("Taunted!", sound: nil, seconds: 6)
     }
 
     /// The Dock animates when icons are added or removed: follow it for a moment.

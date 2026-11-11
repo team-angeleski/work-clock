@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import UserNotifications
 
 // MARK: Friend board
 // A private race between up to 5 friends, ranked by focus score (focus time plus bonuses).
@@ -51,6 +52,20 @@ final class Board {
     var inviteCode: String? { defaults.string(forKey: "inviteCode") }
     var me: Friend? { friends.first { $0.id == memberID } }
     var others: [Friend] { friends.filter { $0.id != memberID } }
+
+    /// The race with my own row using my live numbers (the server's copy lags a few minutes).
+    var ranked: [Friend] {
+        guard let store else { return friends }
+        return friends.map { f in
+            guard f.id == memberID else { return f }
+            return Friend(id: f.id, name: f.name, level: store.level, streak: store.streak,
+                          focusing: store.mode == .running && store.onTask,
+                          today: max(f.today, Int(store.today)), score: max(f.score, Int(store.todayScore)),
+                          yesterday: f.yesterday, week: f.week - f.score + max(f.score, Int(store.todayScore)),
+                          taunted_today: f.taunted_today)
+        }
+        .sorted { $0.score != $1.score ? $0.score > $1.score : $0.name < $1.name }
+    }
 
     /// Yesterday's winner(s), by score.
     var champions: Set<UUID> {
@@ -134,6 +149,7 @@ final class Board {
             self.code = j.code
             error = nil
             store?.announce(code == nil ? "Board \(j.code) created" : "Joined the board", sound: "Glass")
+            Self.askForNotifications()
             await sync()
         } catch { self.error = describe(error) }
     }
@@ -219,8 +235,10 @@ final class Board {
         defaults.set(today, forKey: "boardAnnouncedDay")
         if champs.contains(mine) {
             store?.announce("You won yesterday! \(tauntsLeft) taunts ready", sound: "Hero", seconds: 6)
+            notify("You won yesterday 👑", "You've got \(tauntsLeft) taunts to send. Right-click your clock.")
         } else if let winner = friends.first(where: { champs.contains($0.id) }) {
             store?.announce("\(winner.name) won yesterday. Brace yourself.", sound: "Funk", seconds: 6)
+            notify("\(winner.name) won yesterday", "Taunts incoming. Win today to get your revenge.")
         }
     }
 
@@ -228,9 +246,12 @@ final class Board {
         guard !others.isEmpty, let store, store.today > 300 else { return }
         let now = leading
         if let before = lastLead, before != now {
-            if now { store.announce("You took the lead!", sound: "Glass") }
-            else if let top = others.max(by: { $0.score < $1.score }) {
+            if now {
+                store.announce("You took the lead!", sound: "Glass")
+                notify("You took the lead 👑", raceLine ?? "Keep going")
+            } else if let top = others.max(by: { $0.score < $1.score }) {
                 store.announce("\(top.name) overtook you", sound: "Basso")
+                notify("\(top.name) overtook you", raceLine.map { "\($0). Get back to it." } ?? "Get back to it.")
             }
         }
         lastLead = now
@@ -242,7 +263,8 @@ final class Board {
     private func schedule(_ incoming: [Taunt]) {
         for t in incoming where !scheduled.contains(t.id) {
             scheduled.insert(t.id)
-            let delay = Double.random(in: 120...2700)
+            // Hidden test switch: `defaults write local.workclock debugFastTaunts -bool YES`.
+            let delay = defaults.bool(forKey: "debugFastTaunts") ? 3 : Double.random(in: 120...2700)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.enqueue(t) }
         }
     }
@@ -264,6 +286,7 @@ final class Board {
         showing = next
         onShowTaunt?(next)
         Self.playPoop()
+        notify("\(next.from_name) says", next.message)
         Task { _ = try? await call("focus_seen", ["p_member": memberID?.uuidString, "p_secret": secret?.uuidString, "p_taunt": next.id.uuidString]) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 9) { [weak self] in self?.dismissTaunt() }
     }
@@ -289,17 +312,45 @@ final class Board {
         guard !key.isEmpty else { throw BoardError(text: "This build has no board key") }
         var req = URLRequest(url: base.appendingPathComponent(fn))
         req.httpMethod = "POST"
-        req.timeoutInterval = 15
+        req.timeoutInterval = 10
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(key, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         req.httpBody = try JSONSerialization.data(withJSONObject: body.mapValues { $0 ?? NSNull() })
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await send(req)
         guard let http = resp as? HTTPURLResponse, http.statusCode < 300 else {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String
             throw BoardError(text: msg ?? "Couldn't reach the board")
         }
         return data
+    }
+
+    /// Retries dropped connections and timeouts (Wi-Fi blips, sleeping Macs) before giving up.
+    private func send(_ req: URLRequest, attempts: Int = 3) async throws -> (Data, URLResponse) {
+        var last: Error?
+        for attempt in 0..<attempts {
+            do { return try await URLSession.shared.data(for: req) } catch let e as URLError {
+                last = e
+                let transient: [URLError.Code] = [.networkConnectionLost, .timedOut, .cannotConnectToHost,
+                                                  .cannotFindHost, .dnsLookupFailed, .secureConnectionFailed]
+                guard transient.contains(e.code), attempt < attempts - 1 else { break }
+                try? await Task.sleep(for: .milliseconds(600 * (attempt + 1)))
+            }
+        }
+        throw last ?? URLError(.unknown)
+    }
+
+    // MARK: Notifications (banners that stay in Notification Center)
+
+    static func askForNotifications() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    private func notify(_ title: String, _ body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
     private func describe(_ e: Error) -> String {

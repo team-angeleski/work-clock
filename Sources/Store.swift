@@ -25,18 +25,6 @@ private struct SaveFile: Codable {
     var distractions: [String: Date]? = nil
 }
 
-/// Random rewards every 10 focused minutes. Unpredictable payouts keep you going.
-enum Rarity: String, CaseIterable {
-    case common, rare, epic, legendary
-    var xp: Double { switch self { case .common: 5; case .rare: 15; case .epic: 40; case .legendary: 100 } }
-    var title: String { rawValue.capitalized }
-    var sound: String { switch self { case .common: "Pop"; case .rare: "Glass"; case .epic, .legendary: "Hero" } }
-    static func roll() -> Rarity {
-        let r = Double.random(in: 0..<1)
-        return r < 0.02 ? .legendary : r < 0.12 ? .epic : r < 0.40 ? .rare : .common
-    }
-}
-
 struct DayTotal: Identifiable {
     let id: Date
     let total: TimeInterval
@@ -59,14 +47,6 @@ final class Store {
     // Game state
     private(set) var xp = 0.0
     private(set) var flash: String?
-    private(set) var flashRarity: Rarity?
-    private(set) var dropProgress = 0.0          // focused seconds toward the next drop
-    private(set) var drops: [String: Int] = [:]  // lifetime loot by rarity
-    private(set) var boostUntil: Date?
-    private var stopArmed = false
-    let dropEvery = 600.0
-    var dropRemaining: TimeInterval { max(dropEvery - dropProgress, 0) }
-    var boosted: Bool { (boostUntil ?? .distantPast) > now }
     private(set) var levelUpTick = 0
     private(set) var goalTick = 0
 
@@ -128,20 +108,7 @@ final class Store {
         switch mode {
         case .idle: beginPicking()
         case .picking: start()
-        case .running:
-            // Loss aversion: a drop this close is worth one more look.
-            if !stopArmed && dropRemaining < 180 {
-                stopArmed = true
-                let left = dropRemaining < 60 ? "\(Int(dropRemaining))s" : "\(Int(dropRemaining / 60) + 1)m"
-                show("Drop in \(left)! Stop?", seconds: 3)
-                Task { [weak self] in
-                    try? await Task.sleep(for: .seconds(3))
-                    self?.stopArmed = false
-                }
-                return
-            }
-            stopArmed = false
-            stop()
+        case .running: stop()
         }
     }
 
@@ -267,9 +234,7 @@ final class Store {
             else if !isSelf && key != segApp { close(at: now); begin(key, at: now) }
             offSince = nil
             if comboStart == nil { comboStart = now }
-            award(multiplier / 60 * (boosted ? 2 : 1))
-            dropProgress += 1
-            if dropProgress >= dropEvery { dropProgress = 0; openDrop() }
+            award(multiplier / 60)
         } else {
             if onTask {
                 if away {
@@ -330,25 +295,12 @@ final class Store {
         }
     }
 
-    private func openDrop() {
-        let rarity = Rarity.roll()
-        drops[rarity.rawValue, default: 0] += 1
-        if rarity == .legendary { boostUntil = now.addingTimeInterval(15 * 60) }
-        award(rarity.xp)
-        levelUpTick += 1
-        NSSound(named: rarity.sound)?.play()
-        show(rarity == .legendary ? "LEGENDARY! 2× XP" : "+\(Int(rarity.xp)) XP \(rarity.title)!",
-             seconds: 6, rarity: rarity)
-        save()
-    }
-
-    private func show(_ text: String, seconds: Double = 3, rarity: Rarity? = nil) {
+    private func show(_ text: String, seconds: Double = 3) {
         flash = text
-        flashRarity = rarity
         flashTask?.cancel()
         flashTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(seconds))
-            if !Task.isCancelled { self?.flash = nil; self?.flashRarity = nil }
+            if !Task.isCancelled { self?.flash = nil }
         }
     }
 
@@ -663,7 +615,7 @@ final class Store {
         if let s = segStart { all.append(Segment(start: s, end: Date(), app: segApp)) }
         let data = SaveFile(segments: all, xp: xp, picked: picked, goalHours: goalHours, idlePause: idlePause,
                             running: mode == .running, savedAt: Date(), sessionXP: sessionXP,
-                            dropProgress: dropProgress, drops: drops, boostUntil: boostUntil, autoGoal: autoGoal,
+                            autoGoal: autoGoal,
                             distractions: distractions)
         if let json = try? JSONEncoder().encode(data) { try? json.write(to: file, options: .atomic) }
     }
@@ -679,9 +631,6 @@ final class Store {
         picked = data.picked
         goalHours = data.goalHours
         idlePause = data.idlePause
-        dropProgress = data.dropProgress ?? 0
-        drops = data.drops ?? [:]
-        boostUntil = data.boostUntil
         autoGoal = data.autoGoal ?? true
         distractions = (data.distractions ?? [:]).filter { Date().timeIntervalSince($0.value) < 14 * 86400 }
         // Restarted mid-session (an update, a crash): carry on instead of stopping.
