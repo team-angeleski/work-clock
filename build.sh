@@ -2,6 +2,7 @@
 # Builds WorkClock.app next to this script.
 set -euo pipefail
 cd "${0:A:h}"
+VERSION="1.2"
 
 APP=build/WorkClock.app
 rm -rf "$APP"
@@ -18,7 +19,7 @@ mkdir -p "$APP/Contents/Resources"
 [ -f server/anon.key ] && cp server/anon.key "$APP/Contents/Resources/anon.key"
 python3 tools/poop.py "$APP/Contents/Resources/poop.wav"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -28,8 +29,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDisplayName</key><string>Work Clock</string>
   <key>CFBundleExecutable</key><string>WorkClock</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$VERSION</string>
   <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>

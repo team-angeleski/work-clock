@@ -54,6 +54,7 @@ struct PillView: View {
                         .font(.system(size: h * 0.165, weight: .medium))
                         .foregroundStyle(subtitleStyle)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -115,7 +116,7 @@ struct PillView: View {
             if minute % 2 == 1, let next = store.nextTier {
                 return "\(long(next.needed)) to \(next.name)"
             }
-            return "\(Store.rank(store.todayPercentile)) today"
+            return store.picked.isEmpty ? "Tap to focus" : Store.rank(store.todayPercentile)
         case .picking: return store.pickingSet.isEmpty ? "Click your apps" : "Tap to start"
         case .running:
             if !store.onTask { return store.offReason.map { "Off task · \($0)" } ?? "Off task" }
@@ -556,9 +557,22 @@ private struct Line: Shape {
 struct DetailView: View {
     @Bindable var store: Store
     let board: Board
+    let updater: Updater
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            if let v = updater.available {
+                HStack {
+                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)
+                    Text("Work Clock \(v) is out").font(.callout.weight(.semibold))
+                    Spacer()
+                    Button(updater.updating ? "Updating…" : "Update") { updater.install() }
+                        .controlSize(.small)
+                        .disabled(updater.updating)
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(.blue.opacity(0.12)))
+            }
             TodayBar(store: store)
             FriendsSection(board: board, store: store)
             CompareCard(store: store)
@@ -579,6 +593,8 @@ struct DetailView: View {
                 if store.mode == .picking {
                     Button("Cancel") { store.cancelPicking() }.controlSize(.small)
                 }
+                Button("Change apps") { store.changeApps() }.controlSize(.small)
+                    .help("Pick different apps or sites to count. Or Option-click the clock.")
                 Button("Quit") { NSApp.terminate(nil) }.controlSize(.small)
             }
         }

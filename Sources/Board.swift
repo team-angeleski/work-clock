@@ -1,6 +1,5 @@
 import AppKit
 import Observation
-import UserNotifications
 
 // MARK: Friend board
 // A private race between up to 5 friends, ranked by focus score (focus time plus bonuses).
@@ -75,6 +74,7 @@ final class Board {
     }
 
     @ObservationIgnored var onShowTaunt: ((Taunt?) -> Void)?
+    @ObservationIgnored var onSynced: (() -> Void)?
     @ObservationIgnored private weak var store: Store?
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private var scheduled: Set<UUID> = []
@@ -115,13 +115,18 @@ final class Board {
         let ranked = others.sorted { $0.score > $1.score }
         if let ahead = ranked.filter({ $0.score >= mine }).last {
             let gap = Double(ahead.score - mine) / rate
-            return "\(minutes(gap + 60)) to beat \(ahead.name)"
+            return "\(minutes(gap + 60)) to beat \(short(ahead.name))"
         }
         let second = ranked[0]
-        return "Leading \(second.name) by \(minutes(Double(mine - second.score)))"
+        return "Leading \(short(second.name)) by \(minutes(Double(mine - second.score)))"
     }
 
     var leading: Bool { others.allSatisfy { Int(store?.todayScore ?? 0) > $0.score } && !others.isEmpty }
+
+    private func short(_ name: String) -> String {
+        let first = name.split(separator: " ").first.map(String.init) ?? name
+        return first.count > 9 ? String(first.prefix(8)) + "…" : first
+    }
 
     private func minutes(_ seconds: Double) -> String {
         let m = max(1, Int((seconds / 60).rounded(.up)))
@@ -187,7 +192,7 @@ final class Board {
 
     private func syncIfDue() {
         guard joined else { return }
-        let every: TimeInterval = store?.mode == .running ? 120 : 300
+        let every: TimeInterval = defaults.bool(forKey: "debugCoachFast") ? 15 : store?.mode == .running ? 120 : 300
         let since = Date().timeIntervalSince(lastSyncAttempt)
         // Check in just before 9am and 1pm: the server only credits bonus time it saw before the cut-off.
         let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
@@ -215,6 +220,7 @@ final class Board {
             lastSynced = Date()
             error = nil
             schedule(s.incoming)
+            onSynced?()
             announceDay()
             announceLeadChange()
         } catch let e as BoardError where e.text == "Not a member of this board" {
@@ -340,18 +346,8 @@ final class Board {
         throw last ?? URLError(.unknown)
     }
 
-    // MARK: Notifications (banners that stay in Notification Center)
-
-    static func askForNotifications() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
-    }
-
-    private func notify(_ title: String, _ body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
-    }
+    static func askForNotifications() { Notify.ask() }
+    private func notify(_ title: String, _ body: String) { Notify.post(title, body) }
 
     private func describe(_ e: Error) -> String {
         if let b = e as? BoardError { return b.text }

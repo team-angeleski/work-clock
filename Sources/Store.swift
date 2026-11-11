@@ -104,9 +104,10 @@ final class Store {
     // MARK: Actions
 
     /// The single pill click: idle → pick apps → focus → stop.
-    func primaryAction() {
+    /// One click starts with your usual apps; pass `repick` (Option-click) to choose again.
+    func primaryAction(repick: Bool = false) {
         switch mode {
-        case .idle: beginPicking()
+        case .idle: picked.isEmpty || repick ? beginPicking() : start()
         case .picking: start()
         case .running: stop()
         }
@@ -119,6 +120,12 @@ final class Store {
         case .picking: start()
         case .idle: picked.isEmpty ? beginPicking() : start()
         }
+    }
+
+    /// From the panel: choose different apps for the next session.
+    func changeApps() {
+        if mode == .running { stop() }
+        beginPicking()
     }
 
     func cancelPicking() {
@@ -535,6 +542,15 @@ final class Store {
         let base = past.isEmpty ? 2700 : past.reduce(0, +) / Double(past.count)
         let target = min(max(base + 900, 1800), 5 * 3600)
         return (target / 900).rounded() * 900
+    }
+
+    /// Tomorrow's adaptive goal: the last 7 days including today, plus 15 minutes.
+    var adaptiveGoalTomorrow: TimeInterval {
+        let cal = Calendar.current
+        let start = cal.startOfDay(for: now)
+        let days = (0..<7).map { total(on: cal.date(byAdding: .day, value: -$0, to: start)!) }.filter { $0 >= 300 }
+        let base = days.isEmpty ? 2700 : days.reduce(0, +) / Double(days.count)
+        return (min(max(base + 900, 1800), 5 * 3600) / 900).rounded() * 900
     }
 
     /// Minutes a day for the Elite tier (95th percentile).

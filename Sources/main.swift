@@ -54,7 +54,7 @@ final class HotKey {
 
 final class PillHost<Content: View>: NSHostingView<Content> {
     var onPress: ((Bool) -> Void)?
-    var onClick: (() -> Void)?
+    var onClick: ((Bool) -> Void)?
     var onRightClick: (() -> Void)?
     var onHover: ((Bool) -> Void)?
 
@@ -73,7 +73,9 @@ final class PillHost<Content: View>: NSHostingView<Content> {
     override func mouseUp(with event: NSEvent) {
         if controlClick { controlClick = false; return }
         onPress?(false)
-        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick?() }
+        if bounds.contains(convert(event.locationInWindow, from: nil)) {
+            onClick?(event.modifierFlags.contains(.option))
+        }
     }
 
     override func rightMouseDown(with event: NSEvent) { onRightClick?() }
@@ -93,6 +95,7 @@ final class PillHost<Content: View>: NSHostingView<Content> {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     let store = Store()
+    let updater = Updater()
     lazy var board: Board = {
         let b = Board(store: store)
         store.board = b
@@ -107,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var peekBlocked = false   // after a click, wait for the mouse to leave before peeking again
     private var hotKey: HotKey?
     private var tauntPanel: NSPanel?
+    private var coach: Coach?
 
     func applicationDidFinishLaunching(_ note: Notification) {
         let prompt = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
@@ -131,10 +135,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         host.frame = blur.bounds
         host.autoresizingMask = [.width, .height]
         host.onPress = { [weak self] down in self?.store.pressed = down }
-        host.onClick = { [weak self] in
+        host.onClick = { [weak self] option in
             self?.peekBlocked = true
             self?.hidePeek()
-            self?.store.primaryAction()
+            self?.store.primaryAction(repick: option)
         }
         host.onRightClick = { [weak self] in self?.toggleDetails() }
         host.onHover = { [weak self] inside in
@@ -174,7 +178,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         RunLoop.main.add(timer, forMode: .common)
         hotKey = HotKey { [weak self] in self?.store.quickToggle() }
         board.onShowTaunt = { [weak self] taunt in self?.showTaunt(taunt) }
-        if board.joined { Board.askForNotifications() }
+        Notify.ask()
+        coach = Coach(store: store, board: board)
+        coach?.onShake = { [weak self] in self?.shake() }
+        board.onSynced = { [weak self] in self?.coach?.boardSynced() }
 
         // A friend who installed from an invite lands straight on the join form.
         if board.inviteCode != nil && !board.joined {
@@ -222,6 +229,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         image.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
         image.resizingMode = .stretch
         return image
+    }
+
+    /// A quick side-to-side shake of the whole pill, like a wrong password.
+    private func shake() {
+        let origin = panel.frame.origin
+        Task { @MainActor in
+            for dx in [-8.0, 8, -6, 6, -3, 3, 0] {
+                panel.setFrameOrigin(NSPoint(x: origin.x + dx, y: origin.y))
+                try? await Task.sleep(for: .milliseconds(45))
+            }
+        }
     }
 
     /// A friend's taunt floats above the pill for a few seconds.
@@ -304,7 +322,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         hidePeek()
         if details.isShown { details.performClose(nil); return }
         NSApp.activate()
-        details.contentViewController = NSHostingController(rootView: DetailView(store: store, board: board))
+        details.contentViewController = NSHostingController(rootView: DetailView(store: store, board: board, updater: updater))
         details.show(relativeTo: host.bounds, of: host, preferredEdge: .maxY)
     }
 }
