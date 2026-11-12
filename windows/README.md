@@ -1,4 +1,6 @@
-# Work Clock for Windows
+# Darnell Jr. for Windows
+
+(Formerly Work Clock. The repo, the `WorkClock-Setup.exe` download, the `%APPDATA%\WorkClock` data folder and the app identifier keep the old name so installs and updates keep working.)
 
 The same clock, board and account as the Mac app, for Windows 10 and 11. Use a Mac and a PC? Sign in to the same account on both and your time adds up.
 
@@ -16,11 +18,11 @@ With a friend's board code:
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/team-angeleski/work-clock/main/windows/install.ps1))) CODE
 ```
 
-The script downloads `WorkClock-Setup.exe` from the newest GitHub release that has one, installs it for your user only (no admin prompt) into `%LOCALAPPDATA%\Work Clock`, and opens it. Running it again updates in place. Your focus record lives in `%APPDATA%\WorkClock` and survives updates and uninstalls.
+The script downloads `WorkClock-Setup.exe` from the newest GitHub release that has one, installs it for your user only (no admin prompt) into `%LOCALAPPDATA%\Darnell Jr` (Windows drops the trailing full stop from folder names), removes any copy installed under the old name,, and opens it. Running it again updates in place. Your focus record lives in `%APPDATA%\WorkClock` and survives updates and uninstalls.
 
 You can also download `WorkClock-Setup.exe` from the [releases page](https://github.com/team-angeleski/work-clock/releases) and run it. It isn't code-signed, so Windows SmartScreen shows "Windows protected your PC": click **More info → Run anyway**. (The PowerShell line doesn't trigger this.)
 
-Uninstall from Settings → Apps → Work Clock.
+Uninstall from Settings → Apps → Darnell Jr.
 
 ## Using it
 

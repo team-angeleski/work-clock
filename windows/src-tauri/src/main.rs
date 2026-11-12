@@ -1,4 +1,4 @@
-// Work Clock for Windows: a focus clock that sits above the taskbar and races your friends.
+// Darnell Jr. (formerly Work Clock) for Windows: a focus clock that sits above the taskbar and races your friends.
 // Same account, board and counting rules as the Mac app.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![recursion_limit = "256"]
@@ -108,10 +108,13 @@ fn get_autostart(app: AppHandle) -> bool {
 }
 
 #[tauri::command]
-fn set_autostart(app: AppHandle, on: bool) {
+fn set_autostart(app: AppHandle, s: St, on: bool) {
     use tauri_plugin_autostart::ManagerExt;
     let a = app.autolaunch();
     let _ = if on { a.enable() } else { a.disable() };
+    let mut c = s.core.lock().unwrap();
+    c.settings.autostart_off = !on;
+    c.save_settings();
 }
 
 #[tauri::command]
@@ -276,7 +279,7 @@ fn pill_default(app: &AppHandle) -> PhysicalPosition<i32> {
 
 fn make_pill(app: &AppHandle, core: &Arc<Mutex<Core>>) -> tauri::Result<WebviewWindow> {
     let w = WebviewWindowBuilder::new(app, "pill", WebviewUrl::App("pill.html".into()))
-        .title("Work Clock")
+        .title("Darnell Jr.")
         .inner_size(PILL_W, PILL_H)
         .decorations(false).transparent(true).shadow(false).resizable(false)
         .always_on_top(true).skip_taskbar(true).focused(false)
@@ -316,7 +319,7 @@ fn toggle_panel(app: &AppHandle, force_show: bool) {
         Some(w) => w,
         None => {
             let Ok(w) = WebviewWindowBuilder::new(app, "panel", WebviewUrl::App("panel.html".into()))
-                .title("Work Clock").inner_size(392.0, 620.0)
+                .title("Darnell Jr.").inner_size(392.0, 620.0)
                 .decorations(false).transparent(true).resizable(false).shadow(true)
                 .always_on_top(true).skip_taskbar(true).visible(false).build() else { return };
             let w2 = w.clone();
@@ -333,7 +336,7 @@ fn toggle_panel(app: &AppHandle, force_show: bool) {
 fn show_setup(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("setup") { let _ = w.show(); let _ = w.set_focus(); return; }
     let _ = WebviewWindowBuilder::new(app, "setup", WebviewUrl::App("setup.html".into()))
-        .title("Work Clock").inner_size(540.0, 640.0).resizable(false).center().focused(true).build();
+        .title("Darnell Jr.").inner_size(540.0, 640.0).resizable(false).center().focused(true).build();
 }
 
 fn show_taunt(app: &AppHandle, show: bool) {
@@ -489,13 +492,13 @@ fn main() {
             make_pill(&handle, &core_setup)?;
 
             let menu = Menu::with_items(app, &[
-                &MenuItem::with_id(app, "panel", "Open Work Clock", true, None::<&str>)?,
+                &MenuItem::with_id(app, "panel", "Open Darnell Jr.", true, None::<&str>)?,
                 &MenuItem::with_id(app, "toggle", "Start / Stop  (Ctrl+Alt+F)", true, None::<&str>)?,
                 &MenuItem::with_id(app, "setup", "Setup…", true, None::<&str>)?,
                 &PredefinedMenuItem::separator(app)?,
-                &MenuItem::with_id(app, "quit", "Quit Work Clock", true, None::<&str>)?,
+                &MenuItem::with_id(app, "quit", "Quit Darnell Jr.", true, None::<&str>)?,
             ])?;
-            let mut tray = TrayIconBuilder::with_id("main").tooltip("Work Clock").menu(&menu).show_menu_on_left_click(false)
+            let mut tray = TrayIconBuilder::with_id("main").tooltip("Darnell Jr.").menu(&menu).show_menu_on_left_click(false)
                 .on_menu_event(|app, e| match e.id.as_ref() {
                     "panel" => toggle_panel(app, true),
                     "toggle" => app.state::<App>().core.lock().unwrap().engine.quick_toggle(),
@@ -511,9 +514,13 @@ fn main() {
             if let Some(icon) = app.default_window_icon() { tray = tray.icon(icon.clone()); }
             tray.build(app)?;
 
-            // First run: open at login, and walk through setup.
-            let (joined, setup_done) = { let c = core_setup.lock().unwrap(); (c.joined(), c.settings.setup_done) };
-            if !setup_done {
+            // Open at login unless turned off. Re-registered on every start, so the entry follows the
+            // app's current name and folder (it was renamed from Work Clock to Darnell Jr.).
+            let (joined, setup_done, autostart_off) = {
+                let c = core_setup.lock().unwrap();
+                (c.joined(), c.settings.setup_done, c.settings.autostart_off)
+            };
+            if !autostart_off {
                 use tauri_plugin_autostart::ManagerExt;
                 let _ = app.autolaunch().enable();
             }
@@ -529,7 +536,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("Work Clock failed to start")
+        .expect("Darnell Jr. failed to start")
         .run(|_, e| {
             // Closing the setup or panel window never quits: the clock lives in the pill.
             if let tauri::RunEvent::ExitRequested { api, code, .. } = e { if code.is_none() { api.prevent_exit(); } }

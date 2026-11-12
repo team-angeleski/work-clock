@@ -23,6 +23,8 @@ pub struct Settings {
     pub pill_pos: Option<(i32, i32)>,
     #[serde(default)]
     pub setup_done: bool,
+    #[serde(default)]
+    pub autostart_off: bool,
 }
 
 impl Settings {

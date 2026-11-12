@@ -1,4 +1,4 @@
-# Work Clock for Windows: installs (or updates) and opens it.
+# Darnell Jr. (formerly Work Clock) for Windows: installs (or updates) and opens it.
 #
 #   irm https://raw.githubusercontent.com/team-angeleski/work-clock/main/windows/install.ps1 | iex
 #
@@ -11,7 +11,7 @@ $ProgressPreference = "SilentlyContinue"
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 Write-Host ""
-Write-Host "Installing Work Clock..." -ForegroundColor Cyan
+Write-Host "Installing Darnell Jr. ..." -ForegroundColor Cyan
 
 # The newest release that has a Windows build (some releases are Mac-only).
 $releases = Invoke-RestMethod "https://api.github.com/repos/team-angeleski/work-clock/releases?per_page=20" -Headers @{ "User-Agent" = "WorkClock-Installer" }
@@ -23,6 +23,7 @@ $setup = Join-Path $env:TEMP "WorkClock-Setup.exe"
 Invoke-WebRequest $asset.browser_download_url -OutFile $setup -UseBasicParsing
 
 # Replace any running copy. Your focus history is kept: it lives in %APPDATA%\WorkClock.
+# (The installer also removes a copy installed under the old name, Work Clock.)
 Get-Process WorkClock -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 1
 Start-Process $setup -ArgumentList "/S" -Wait
@@ -34,12 +35,14 @@ if ($Code) {
     Set-Content (Join-Path $dir "invite.txt") $Code.Trim().ToUpper()
 }
 
-$exe = Join-Path $env:LOCALAPPDATA "Work Clock\WorkClock.exe"
-if (-not (Test-Path $exe)) { throw "The installer didn't finish. Try running it again." }
+# Installed as "Darnell Jr" (Windows drops the full stop from folder names). Older builds used "Work Clock".
+$exe = @("Darnell Jr", "Darnell Jr.", "Work Clock") | ForEach-Object { Join-Path $env:LOCALAPPDATA "$_\WorkClock.exe" } |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $exe) { throw "The installer didn't finish. Try running it again." }
 Start-Process $exe
 
 Write-Host ""
-Write-Host "Work Clock is installed and open." -ForegroundColor Green
-Write-Host "Your clock sits above the taskbar, bottom right. A setup window walks you"
+Write-Host "Darnell Jr. is installed and open." -ForegroundColor Green
+Write-Host "The clock sits above the taskbar, bottom right. A setup window walks you"
 Write-Host "through signing in (or joining your friends' board). Takes a minute."
 Write-Host ""
