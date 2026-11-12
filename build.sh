@@ -2,7 +2,7 @@
 # Builds WorkClock.app next to this script.
 set -euo pipefail
 cd "${0:A:h}"
-VERSION="1.4"
+VERSION="1.5"
 
 APP=build/WorkClock.app
 rm -rf "$APP"
@@ -18,6 +18,7 @@ lipo -create build/WorkClock-arm64 build/WorkClock-x86_64 -output "$APP/Contents
 mkdir -p "$APP/Contents/Resources"
 [ -f server/anon.key ] && cp server/anon.key "$APP/Contents/Resources/anon.key"
 python3 tools/poop.py "$APP/Contents/Resources/poop.wav"
+cp assets/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"   # from tools/make_icon.swift
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -28,6 +29,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>WorkClock</string>
   <key>CFBundleDisplayName</key><string>Work Clock</string>
   <key>CFBundleExecutable</key><string>WorkClock</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$VERSION</string>
