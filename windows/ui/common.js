@@ -24,7 +24,7 @@ function avatar(name, size = 22) {
  *  Tinted by status, or in the character's skin with a lighter top. */
 function faceSvg(s, w, cx, cy) {
   const active = s.mode === "running" && s.onTask;
-  const ch = s.character ? CHARACTER[s.character] : null;
+  const ch = costumeOf(s.character);
   const x0 = cx - w / 2, y0 = cy - w / 2;
   const tint = s.offTask ? [255, 90, 90] : s.goalMet ? [52, 199, 89] : active ? [255, 149, 0] : [150, 150, 158];
   const mix = (c, k) => `rgb(${c.map(v => Math.round(v + (255 - v) * k)).join(",")})`;
@@ -61,7 +61,7 @@ function ring(s, size) {
   const active = s.mode === "running" && s.onTask;
   const stroke = active ? (s.goalMet ? "url(#gGoal)" : "url(#gFlow)") : s.offTask ? "rgba(255,107,107,.7)" : "rgba(160,160,170,.7)";
   const cx = size / 2, cy = size / 2, w = size * 0.7;
-  const ch = s.character ? CHARACTER[s.character] : null;
+  const ch = costumeOf(s.character);
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="overflow:visible;flex:none">
       <defs>
         <linearGradient id="gFlow" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb347"/><stop offset="1" stop-color="#ff5e8a"/></linearGradient>

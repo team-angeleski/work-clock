@@ -133,6 +133,7 @@
       <div id="raceCard" class="card">
         <h3 id="raceTitle">Today's race</h3>
         <div id="friends"></div>
+        <div class="dim hidden" id="winHint" style="font-size:12px;margin-top:8px"></div>
         <div class="faint" id="synced" style="font-size:11px;margin-top:6px"></div>
       </div>
       <div id="tauntCard" class="card hidden">
@@ -257,9 +258,13 @@ onState(s => {
       <div class="score">${f.scoreText}</div>
     </div>`).join("") || `<div class="dim">Just you so far. Invite a friend below.</div>`;
   // Yesterday's winner picks today's character.
-  $("#pickCard").classList.toggle("hidden", !(b.joined && b.canPick));
-  if (b.canPick) {
-    const mine = s.character && CHARACTER[s.character];
+  const picking = CHARACTERS_ENABLED && b.joined && b.canPick;
+  $("#pickCard").classList.toggle("hidden", !picking);
+  // The race hint: what winning today gets you, unless you've got taunts to send.
+  $("#winHint").classList.toggle("hidden", !(b.joined && b.tauntsLeft <= 0 && b.friends.length > 1));
+  $("#winHint").textContent = CHARACTERS_ENABLED ? "👑 Win today: 3 taunts and unlock a legend" : "👑 Win today to earn 3 taunts for tomorrow";
+  if (picking) {
+    const mine = costumeOf(s.character);
     const owned = new Set(b.unlocked || []), n = CHARACTERS.filter(c => owned.has(c.id)).length;
     $("#pickTitle").textContent = mine ? `🎭 Today you're ${b.characterName || mine.name}`
       : b.canUnlock ? "🎭 You won yesterday. Unlock a legend" : "🎭 You won yesterday. Pick who you are today";
@@ -343,10 +348,10 @@ function sendTaunt() {
     .then(() => $("#tauntMsg").value = "").catch(e => $("#tauntErr").textContent = e);
 }
 let pickedShown;
-function charTitle(f) { const c = f.character && CHARACTER[f.character]; return c ? (f.characterName || c.name) : ""; }
-function charBadge(f) { const c = f.character && CHARACTER[f.character]; return c ? `<span class="badge" title="${esc(charTitle(f))}">${c.badge}</span>` : ""; }
+function charTitle(f) { const c = costumeOf(f.character); return c ? (f.characterName || c.name) : ""; }
+function charBadge(f) { const c = costumeOf(f.character); return c ? `<span class="badge" title="${esc(charTitle(f))}">${c.badge}</span>` : ""; }
 function pick(id) {
-  const c = CHARACTER[id]; if (!c) return;
+  const c = costumeOf(id); if (!c) return;
   $("#pickErr").textContent = "";
   const name = $("#pickName").value.trim();
   invoke("set_character", { id, name: name || null, line: c.line }).catch(e => $("#pickErr").textContent = e);

@@ -10,6 +10,13 @@ const CHARACTERS = [
   { id: "icecube", name: "Ice Cube", line: "Today was a good day.", badge: "🧢", skin: rgb(0.52, 0.34, 0.22) },
 ];
 const CHARACTER = Object.fromEntries(CHARACTERS.map(c => [c.id, c]));
+
+/** Characters are switched off for now (as on the Mac, Costume.enabled): everyone gets the basic
+ *  buddy. The picker, the costume on the clock and panel header, and the friend badges all go
+ *  through this switch; the code stays for when they come back. */
+const CHARACTERS_ENABLED = false;
+/** Today's costume for a character id, or null when characters are off or the id is unknown. */
+const costumeOf = id => (CHARACTERS_ENABLED && id && CHARACTER[id]) || null;
 const INK = "#1a1a1a";
 const css = c => `rgb(${c.join(",")})`;
 /** Mix a colour toward white (k > 0) or black (k < 0). */
