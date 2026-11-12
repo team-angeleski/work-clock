@@ -6,6 +6,10 @@ import SwiftUI
 enum Costume: String, CaseIterable, Identifiable {
     case obama, mlk, tyson, fifty, icecube
 
+    /// Off for now: everyone is the basic buddy. Flip to true to bring characters back
+    /// (the server side is still live; see server/characters.sql and server/legends_ladder.sql).
+    static let enabled = false
+
     var id: String { rawValue }
 
     var name: String {

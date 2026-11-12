@@ -613,7 +613,8 @@ struct SettingsView: View {
                 row("building.2.fill", "Late to clock in: −1 a minute after 5 minutes' grace (max −120)")
             }
             Section("Winning") {
-                row("crown.fill", "Top score wins the day: 3 taunts, and you unlock a legend to play as the next day")
+                row("crown.fill", Costume.enabled ? "Top score wins the day: 3 taunts, and you unlock a legend to play as the next day"
+                                                  : "Top score wins the day and gets 3 taunts the next day")
                 row("envelope.fill", "Friends get emailed when you pass them, and when you're 15 minutes late")
             }
             Section("Fair play") {

@@ -24,7 +24,7 @@ struct Friend: Decodable, Identifiable, Equatable {
     var character: String? = nil        // yesterday's winner's costume for today
     var character_name: String? = nil   // what they named it
 
-    var costume: Costume? { character.flatMap(Costume.init(rawValue:)) }
+    var costume: Costume? { Costume.enabled ? character.flatMap(Costume.init(rawValue:)) : nil }
     /// "The Champ", or whatever they named it.
     var characterTitle: String? { costume.map { character_name ?? $0.name } }
 }
@@ -363,7 +363,7 @@ final class Board {
             friends = s.members
             code = s.code
             tauntsLeft = s.taunts_left
-            canPickCostume = s.can_pick_character ?? false
+            canPickCostume = Costume.enabled && (s.can_pick_character ?? false)
             unlocked = Set((s.unlocked ?? []).compactMap(Costume.init(rawValue:)))
             canUnlock = s.can_unlock ?? false
             if let m = s.mine { store.applyRemote(othersToday: TimeInterval(m.others_today), history: m.history) }

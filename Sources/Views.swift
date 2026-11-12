@@ -813,7 +813,7 @@ struct FriendsSection: View {
             }
             if board.canPickCostume { CharacterPicker(board: board) }
             if board.tauntsLeft > 0 && !board.others.isEmpty { tauntBox } else if board.friends.count > 1 {
-                Label("Win today: 3 taunts and unlock a legend", systemImage: "crown")
+                Label(Costume.enabled ? "Win today: 3 taunts and unlock a legend" : "Win today to earn 3 taunts for tomorrow", systemImage: "crown")
                     .font(.caption).foregroundStyle(.secondary)
             }
             BonusCard(store: store)
