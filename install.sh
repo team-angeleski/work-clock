@@ -21,8 +21,11 @@ SRC=$(find "$TMP/app" -maxdepth 1 -name "*.app" | head -1)
 NAME=$(basename "$SRC")
 
 # Replace any older copy, under its old or new name. Focus history is kept (Application Support).
+# Make sure the old copy has really quit before swapping, or "open" would just bring it forward.
 pkill -x WorkClock 2>/dev/null || true
-sleep 1
+for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -x WorkClock >/dev/null || break; sleep 0.5; done
+pkill -9 -x WorkClock 2>/dev/null || true
+sleep 0.5
 rm -rf /Applications/WorkClock.app "/Applications/Darnell Jr..app"
 mv "$SRC" /Applications/
 xattr -dr com.apple.quarantine "/Applications/$NAME" 2>/dev/null || true
