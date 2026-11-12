@@ -171,6 +171,7 @@ struct Ring: View {
                                : AnyShapeStyle(offTask ? Color.red.opacity(0.7) : Color.secondary.opacity(0.7)),
                         style: StrokeStyle(lineWidth: line, lineCap: .round))
                 .rotationEffect(.degrees(-90))
+            if let costume { Ears(skin: costume.skin, size: size * 0.7, earring: costume == .fifty) }
             // Equatable: only redraws when the expression, blink or colour actually changes.
             EquatableView(content: Face(mood: (mood * 20).rounded() / 20, blink: blink,
                                         tint: offTask ? .red : done ? .green : active ? .orange : .gray,
@@ -812,7 +813,7 @@ struct FriendsSection: View {
             }
             if board.canPickCostume { CharacterPicker(board: board) }
             if board.tauntsLeft > 0 && !board.others.isEmpty { tauntBox } else if board.friends.count > 1 {
-                Label("Win today: 3 taunts and a character for tomorrow", systemImage: "crown")
+                Label("Win today: 3 taunts and unlock a legend", systemImage: "crown")
                     .font(.caption).foregroundStyle(.secondary)
             }
             BonusCard(store: store)

@@ -43,6 +43,8 @@ private struct BoardState: Decodable {
     let me: MeInfo?
     let mine: Mine?
     let can_pick_character: Bool?
+    let unlocked: [String]?
+    let can_unlock: Bool?
 }
 
 private struct Mine: Decodable {
@@ -77,6 +79,9 @@ final class Board {
     private(set) var email: String?
     /// I won yesterday, so I get to pick today's character.
     private(set) var canPickCostume = false
+    /// Characters I've unlocked (one per day won), and whether today's unlock is still unused.
+    private(set) var unlocked: Set<Costume> = []
+    private(set) var canUnlock = false
     var myCostume: Costume? { me?.costume }
 
     var memberID: UUID? { defaults.string(forKey: "boardMember").flatMap(UUID.init) }
@@ -359,6 +364,8 @@ final class Board {
             code = s.code
             tauntsLeft = s.taunts_left
             canPickCostume = s.can_pick_character ?? false
+            unlocked = Set((s.unlocked ?? []).compactMap(Costume.init(rawValue:)))
+            canUnlock = s.can_unlock ?? false
             if let m = s.mine { store.applyRemote(othersToday: TimeInterval(m.others_today), history: m.history) }
             if let m = s.me {
                 email = m.email

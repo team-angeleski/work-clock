@@ -11,3 +11,13 @@ alter table focusboard.members add column if not exists character_name text
 alter table focusboard.members add column if not exists character_day date;
 -- Characters: boss, sergeant, professor, techbro, nana, gentleman, scientist, champ.
 -- Live definitions: select pg_get_functiondef('public.focus_set_character(uuid,uuid,text,date,text)'::regprocedure);
+
+-- v1.7: only the five legends (obama, mlk, tyson, fifty, icecube), and they must be unlocked:
+-- each day you win unlocks one of your choice, kept for good (focusboard.unlocks). On a day you
+-- won, you can wear any you've unlocked. focus_sync returns `unlocked` and `can_unlock`.
+create table if not exists focusboard.unlocks (
+  member_id uuid not null references focusboard.members(id) on delete cascade,
+  character text not null,
+  unlocked_on date not null,
+  primary key (member_id, character)
+);

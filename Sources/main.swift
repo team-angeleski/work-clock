@@ -212,11 +212,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                     snap(SetupView(store: self.store, board: self.board, emailOnly: false, startAt: step) {}, "setup-\(step)")
                 }
                 snap(OfficeHours(store: self.store, board: self.board).padding(24).frame(width: 500), "settings-office")
-                snap(LazyVGrid(columns: Array(repeating: GridItem(.fixed(130)), count: 5), spacing: 20) {
+                snap(HStack(spacing: 24) {
                     ForEach(Costume.allCases) { c in
-                        VStack { CharacterFace(costume: c, size: 70); Text(c.name).font(.caption) }
+                        VStack(spacing: 8) { Portrait(costume: c, size: 90); Text(c.name).font(.caption) }
                     }
                 }.padding(30), "characters")
+                snap(HStack(spacing: 18) {
+                    ForEach(Costume.allCases) { c in
+                        Ring(progress: 0.6, active: true, done: false, offTask: false, mood: 0.6, blink: 0, costume: c, size: 60)
+                    }
+                }.padding(20), "characters-clock")
             }
         }
 
