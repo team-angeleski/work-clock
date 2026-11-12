@@ -111,6 +111,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var hotKey: HotKey?
     private var tauntPanel: NSPanel?
     private var coach: Coach?
+    private var windows: AppWindows?
+    private var askedForEmail = false
 
     func applicationDidFinishLaunching(_ note: Notification) {
         let prompt = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
@@ -135,10 +137,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         host.frame = blur.bounds
         host.autoresizingMask = [.width, .height]
         host.onPress = { [weak self] down in self?.store.pressed = down }
-        host.onClick = { [weak self] option in
+        host.onClick = { [weak self] _ in
             self?.peekBlocked = true
             self?.hidePeek()
-            self?.store.primaryAction(repick: option)
+            self?.store.primaryAction()
         }
         host.onRightClick = { [weak self] in self?.toggleDetails() }
         host.onHover = { [weak self] inside in
@@ -181,11 +183,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         Notify.ask()
         coach = Coach(store: store, board: board)
         coach?.onShake = { [weak self] in self?.shake() }
-        board.onSynced = { [weak self] in self?.coach?.boardSynced() }
+        windows = AppWindows(store: store, board: board, updater: updater)
+        board.onSynced = { [weak self] in
+            guard let self else { return }
+            self.coach?.boardSynced()
+            // Accounts from before 1.3 have no email yet: ask once per launch.
+            if self.board.needsEmail && !self.askedForEmail {
+                self.askedForEmail = true
+                self.windows?.showSetup(emailOnly: true)
+            }
+        }
 
-        // A friend who installed from an invite lands straight on the join form.
-        if board.inviteCode != nil && !board.joined {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.toggleDetails() }
+        // Hidden test switch: `defaults write local.workclock debugSnapshot -bool YES` writes the panel
+        // to /tmp/workclock-panel.png a few seconds after launch.
+        if UserDefaults.standard.bool(forKey: "debugSnapshot") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+                guard let self else { return }
+                @MainActor func snap<V: View>(_ v: V, _ name: String) {
+                    let r = ImageRenderer(content: v.background(Color(nsColor: .windowBackgroundColor)))
+                    r.scale = 1.5
+                    if let img = r.nsImage, let tiff = img.tiffRepresentation,
+                       let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                        try? png.write(to: URL(fileURLWithPath: "/tmp/workclock-\(name).png"))
+                    }
+                }
+                snap(DetailView(store: self.store, board: self.board, updater: self.updater), "panel")
+                for step in SetupView.Step.allCases {
+                    snap(SetupView(store: self.store, board: self.board, emailOnly: false, startAt: step) {}, "setup-\(step)")
+                }
+                snap(OfficeHours(store: self.store, board: self.board).padding(24).frame(width: 500), "settings-office")
+            }
+        }
+
+        // New installs (including a friend's invite) open setup.
+        if !board.joined {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.windows?.showSetup() }
         }
 
         // Save on quit, including `kill`, so no focused time is lost.

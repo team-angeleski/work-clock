@@ -67,9 +67,46 @@ final class Coach {
         guard let store else { return }
         let now = Date()
         drifting(store, now)
+        clockIn(store, now)
+        lockDistractions(store, now)
         notStarted(store, now)
         streakAtRisk(store, now)
         recap(store, now)
+    }
+
+    // MARK: 6. Office hours: be at your desk on time
+
+    private func clockIn(_ store: Store, _ now: Date) {
+        guard let due = store.office.due(on: now), !store.clockedIn, store.mode != .running else { return }
+        let toGo = due.timeIntervalSince(now)
+        let at = Office.text(store.office.startMin)
+        let onBoard = board?.joined == true && !(board?.others.isEmpty ?? true)
+        if toGo <= 600 && toGo > 0, once("soon") {
+            Notify.post("Clock in by \(at)", "10 minutes." + (onBoard ? " Late costs a point a minute, and your friends get told." : ""), id: "office")
+        } else if toGo <= 0 && toGo > -3600, once("due") {
+            Notify.post("It's \(at). Clock in.", "One click on your clock, pick your apps, go.", id: "office")
+            store.announce("Clock in", sound: "Funk", seconds: 6)
+            onShake?()
+        } else if toGo <= -15 * 60 && toGo > -3 * 3600, once("late15") {
+            let late = store.office.lateMinutes(now: now, clockedIn: false)
+            Notify.post("You're \(late) minutes late", onBoard ? "Your friends have been told. −\(late) and counting." : "Every minute you wait makes it harder. Start with 5 minutes.", id: "office")
+            onShake?()
+        }
+    }
+
+    /// Before you've clocked in on a workday, distracting sites get closed.
+    private var lastLockCheck = Date.distantPast
+    private func lockDistractions(_ store: Store, _ now: Date) {
+        guard store.office.lockDistractions, store.office.isWorkday(now), !store.clockedIn,
+              Calendar.current.component(.hour, from: now) >= 5,
+              now.timeIntervalSince(lastLockCheck) >= 4,
+              let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier,
+              Browser.isBrowser(id) else { return }
+        lastLockCheck = now
+        guard let domain = Browser.domain(of: id), Browser.isDistraction(domain) else { return }
+        TabCloser.closeFrontTab(of: app)
+        store.announce("Clock in first 🔒", sound: "Basso", seconds: 5)
+        onShake?()
     }
 
     // MARK: 5. Streak about to break
@@ -140,6 +177,11 @@ final class Coach {
 
     func boardSynced() {
         guard let board, let store else { return }
+        // A friend blew their clock-in: rub it in.
+        for f in board.others where f.due_min != nil && f.in_min == nil && (f.late ?? 0) >= 15 {
+            guard once("friendlate-\(f.id)") else { continue }
+            Notify.post("\(f.name) hasn't clocked in", "\(f.late ?? 15) minutes late and losing a point a minute. Get ahead.", id: "friendlate-\(f.id)")
+        }
         for f in board.others {
             defer { friendWasFocusing[f.id] = f.focusing }
             guard f.focusing, friendWasFocusing[f.id] == false else { continue }
@@ -162,6 +204,13 @@ final class Coach {
                                   : (board.raceLine.map { " \($0) before midnight." } ?? "")
         }
         body += " Tomorrow's goal: \(long(store.adaptiveGoalTomorrow))."
+        if let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now) {
+            store.office.promote()
+            let days = store.office.plannedDays
+            if days & (1 << Office.bit(for: tomorrow)) != 0 {
+                body += " Clock in by \(Office.text(store.office.plannedStart))."
+            }
+        }
         Notify.post(store.goalMet ? "Goal smashed today 🎉" : "Today's focus", body, id: "recap")
     }
 }

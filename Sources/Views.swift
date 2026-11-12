@@ -111,13 +111,16 @@ struct PillView: View {
         if let f = store.flash { return f }
         switch store.mode {
         case .idle:
+            if let office = officeLine { return office }
             let minute = Int(store.now.timeIntervalSince1970) / 60
             if let race = board.raceLine, minute % 2 == 0 { return race }
             if minute % 2 == 1, let next = store.nextTier {
                 return "\(long(next.needed)) to \(next.name)"
             }
             return store.picked.isEmpty ? "Tap to focus" : Store.rank(store.todayPercentile)
-        case .picking: return store.pickingSet.isEmpty ? "Click your apps" : "Tap to start"
+        case .picking:
+            if !store.pickingSet.isEmpty { return "Tap to start" }
+            return store.picked.isEmpty ? "Click your apps" : "Pick, or tap for same"
         case .running:
             if !store.onTask { return store.offReason.map { "Off task · \($0)" } ?? "Off task" }
             // Take turns every 4s: the race, then flow or early bird.
@@ -127,8 +130,18 @@ struct PillView: View {
         }
     }
 
+    /// "Clock in by 9:00am" in the hour before, "Late 12m · clock in" after.
+    private var officeLine: String? {
+        guard let due = store.office.due(on: store.now), !store.clockedIn else { return nil }
+        let late = store.office.lateMinutes(now: store.now, clockedIn: false)
+        if late > 0 { return "Late \(late)m · clock in" }
+        let toGo = due.timeIntervalSince(store.now)
+        return toGo > 0 && toGo <= 3600 ? "Clock in by \(Office.text(store.office.startMin))" : nil
+    }
+
     private var subtitleStyle: AnyShapeStyle {
         if store.flash != nil { return AnyShapeStyle(.orange) }
+        if store.mode == .idle && store.office.lateMinutes(now: store.now, clockedIn: store.clockedIn) > 0 { return AnyShapeStyle(.red) }
         if store.mode == .idle && store.todayPercentile < 40 { return AnyShapeStyle(.red.opacity(0.85)) }
         if store.mode == .running && !store.onTask { return AnyShapeStyle(.red.opacity(0.9)) }
         return AnyShapeStyle(.secondary)
@@ -284,7 +297,9 @@ struct PickedIcons: View {
     var size: CGFloat
 
     var body: some View {
-        let apps = Array(store.pickingSet.suffix(3))
+        // Nothing picked yet: show last time's apps faded, since tapping again reuses them.
+        let ghost = store.pickingSet.isEmpty && !store.picked.isEmpty
+        let apps = Array((ghost ? store.picked : store.pickingSet).suffix(3))
         ZStack {
             if apps.isEmpty {
                 Image(systemName: "cursorarrow.click.2")
@@ -298,6 +313,8 @@ struct PickedIcons: View {
                     .resizable()
                     .frame(width: size, height: size)
                     .offset(x: shift * size * 0.38)
+                    .opacity(ghost ? 0.4 : 1)
+                    .saturation(ghost ? 0 : 1)
                     .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
         }
@@ -574,6 +591,7 @@ struct DetailView: View {
                 .background(RoundedRectangle(cornerRadius: 8).fill(.blue.opacity(0.12)))
             }
             TodayBar(store: store)
+            OfficeStatus(store: store)
             FriendsSection(board: board, store: store)
             CompareCard(store: store)
             levelBar
@@ -583,8 +601,6 @@ struct DetailView: View {
             }
             if !store.todaySegmentsByApp.isEmpty || !store.picked.isEmpty { apps }
             Divider()
-            settings
-            Divider()
             HStack {
                 Text("⌃⌥F to start or stop")
                     .font(.caption)
@@ -593,8 +609,7 @@ struct DetailView: View {
                 if store.mode == .picking {
                     Button("Cancel") { store.cancelPicking() }.controlSize(.small)
                 }
-                Button("Change apps") { store.changeApps() }.controlSize(.small)
-                    .help("Pick different apps or sites to count. Or Option-click the clock.")
+                Button("Settings…") { AppWindows.shared?.showSettings() }.controlSize(.small)
                 Button("Quit") { NSApp.terminate(nil) }.controlSize(.small)
             }
         }
@@ -664,27 +679,7 @@ struct DetailView: View {
         }
     }
 
-    private var settings: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle("Grow goal with me", isOn: $store.autoGoal)
-            if store.autoGoal {
-                Text("Goal today: \(long(store.goal)), your recent average + 15m")
-                    .font(.caption).foregroundStyle(.secondary)
-            } else {
-                Stepper(value: $store.goalHours, in: 0.5...12, step: 0.5) {
-                    Text("Daily goal  \(store.goalHours.formatted())h")
-                }
-            }
-            Toggle(board.joined ? "Pause after 2 min idle (always on with friends)" : "Pause after 2 min idle",
-                   isOn: board.joined ? .constant(true) : $store.idlePause)
-                .disabled(board.joined)
-            Toggle("Open at login", isOn: Binding(get: { store.openAtLogin }, set: { store.openAtLogin = $0 }))
-        }
-        .toggleStyle(.switch)
-        .controlSize(.small)
-    }
 }
-
 
 // MARK: Friends
 
@@ -736,20 +731,31 @@ struct FriendRow: View {
                     Text("\(long(Double(friend.today))) focus · \(long(Double(friend.week)))/wk")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
+                if let status = clockStatus {
+                    Text(status.text).font(.caption2.weight(.semibold)).foregroundStyle(status.color)
+                }
             }
         }
         .font(.callout)
+    }
+
+    /// "in 8:52am", "in 9:40am · −35", "late 23m · −23", or "due 9:00am".
+    private var clockStatus: (text: String, color: Color)? {
+        guard let due = friend.due_min else { return nil }
+        let late = friend.late ?? 0
+        if let inAt = friend.in_min {
+            return late > 0 ? ("in \(Office.text(inAt)) · −\(late)", .orange) : ("in \(Office.text(inAt))", .green)
+        }
+        if late > 0 { return ("late \(late)m · −\(late)", .red) }
+        return compact ? nil : ("due \(Office.text(due))", .secondary)
     }
 }
 
 struct FriendsSection: View {
     let board: Board
     let store: Store
-    @State private var name = UserDefaults.standard.string(forKey: "boardName") ?? NSFullUserName().components(separatedBy: " ").first ?? ""
-    @State private var code = UserDefaults.standard.string(forKey: "inviteCode") ?? ""
     @State private var taunt = ""
     @State private var target: UUID?
-    @State private var leaveArmed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -769,30 +775,14 @@ struct FriendsSection: View {
                     .help("Copies a one-line install command with your board code")
                 }
             }
-            if !board.joined { joinForm } else { boardView }
+            if !board.joined {
+                Button("Set up friends and office hours…") { AppWindows.shared?.showSetup() }
+                    .controlSize(.small)
+            } else { boardView }
             if let e = board.error {
                 Text(e).font(.caption).foregroundStyle(.red)
             }
         }
-    }
-
-    private var joinForm: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Race your friends on focus time. Win a day and you get 3 taunts that pop up on their screens.")
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            TextField("Your name", text: $name).textFieldStyle(.roundedBorder)
-            HStack {
-                TextField("Board code", text: $code).textFieldStyle(.roundedBorder).frame(width: 110)
-                Button("Join") { Task { await board.join(code: code, name: name) } }
-                    .disabled(code.trimmingCharacters(in: .whitespaces).count < 6)
-                    .keyboardShortcut(.defaultAction)
-                Spacer()
-                Button("New board") { Task { await board.create(name: name) } }
-            }
-            .controlSize(.small)
-        }
-        .disabled(board.busy)
     }
 
     private var boardView: some View {
@@ -814,19 +804,6 @@ struct FriendsSection: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             BonusCard(store: store)
-            HStack {
-                Text("Fair play: idle pause is always on, you need a key, click or scroll every 10 min, and the server rejects impossible times.")
-                    .font(.caption2).foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button(leaveArmed ? "Really leave?" : "Leave") {
-                    if leaveArmed { Task { await board.leave() } } else {
-                        leaveArmed = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { leaveArmed = false }
-                    }
-                }
-                .controlSize(.mini)
-                .foregroundStyle(leaveArmed ? .red : .secondary)
-            }
         }
         .disabled(board.busy)
     }
@@ -921,5 +898,90 @@ struct TauntBubble: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.yellow.opacity(0.5), lineWidth: 1.5))
         .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
         .padding(20)
+    }
+}
+
+// MARK: Office hours
+
+/// One line in the popover: when you're due and whether you made it.
+struct OfficeStatus: View {
+    let store: Store
+
+    var body: some View {
+        let s = OfficeHours.status(store)
+        HStack {
+            Label("Office hours", systemImage: "building.2.fill").foregroundStyle(.secondary)
+            Spacer()
+            Text(s.text).fontWeight(.semibold).foregroundStyle(s.color)
+        }
+        .font(.callout)
+    }
+}
+
+/// The Settings tab: clock-in time, workdays and the distraction lock.
+struct OfficeHours: View {
+    let store: Store
+    let board: Board
+
+    var body: some View {
+        let office = store.office
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Today").foregroundStyle(.secondary)
+                Spacer()
+                let s = Self.status(store)
+                Text(s.text).fontWeight(.semibold).foregroundStyle(s.color)
+            }
+            HStack(spacing: 12) {
+                Text("I start work at").font(.title3)
+                DatePicker("", selection: startBinding, displayedComponents: .hourAndMinute)
+                    .labelsHidden().datePickerStyle(.field).frame(width: 100)
+            }
+            HStack(spacing: 6) {
+                Text("on").foregroundStyle(.secondary)
+                DayPicker(days: Binding(get: { office.plannedDays }, set: { plan(start: office.plannedStart, days: $0) }))
+            }
+            if office.hasPending {
+                Label("From tomorrow: \(Office.text(office.plannedStart)), \(Self.daysText(office.plannedDays)). Today stays \(Office.text(office.startMin)), \(Self.daysText(office.workdays)).",
+                      systemImage: "clock.arrow.circlepath")
+                    .font(.callout).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Your first 5 focused minutes clock you in. Late costs a point a minute after 5 minutes' grace, and at 15 minutes your friends get an email. Changes start the next day, so you can't push today back.")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Toggle("Close YouTube, Instagram, TikTok and co until I clock in",
+                   isOn: Binding(get: { office.lockDistractions }, set: { store.office.lockDistractions = $0 }))
+                .toggleStyle(.switch)
+        }
+    }
+
+    static func status(_ store: Store) -> (text: String, color: Color) {
+        let office = store.office
+        guard let due = office.due(on: store.now) else { return ("Day off", .secondary) }
+        if store.clockedIn { return ("Clocked in", .green) }
+        let late = office.lateMinutes(now: store.now, clockedIn: false)
+        if late > 0 { return ("\(late)m late · −\(late)", .red) }
+        if store.now < due { return ("Due \(Office.text(office.startMin))", .secondary) }
+        return ("Clock in now", .orange)
+    }
+
+    private var startBinding: Binding<Date> {
+        Binding(
+            get: { Calendar.current.startOfDay(for: Date()).addingTimeInterval(TimeInterval(store.office.plannedStart * 60)) },
+            set: { plan(start: Office.minutes(from: $0), days: store.office.plannedDays) })
+    }
+
+    private func plan(start: Int, days: Int) {
+        store.office.plan(start: start, days: days)
+        Task { await board.setSchedule(start: start, days: days) }
+    }
+
+    static func daysText(_ days: Int) -> String {
+        if days == 0 { return "no workdays" }
+        if days == 31 { return "Mon–Fri" }
+        if days == 127 { return "every day" }
+        let names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        return (0..<7).filter { days & (1 << $0) != 0 }.map { names[$0] }.joined(separator: " ")
     }
 }

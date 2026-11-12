@@ -29,12 +29,9 @@ open /Applications/WorkClock.app
 
 cat <<'EOF'
 
-✅ Work Clock is installed and open (look next to your Dock).
+✅ Work Clock is installed and open.
 
-Next:
-  1. Allow it under System Settings → Privacy & Security → Accessibility,
-     so it can sit right next to your Dock.
-  2. Type your name in the box that pops up and press Join.
-  3. Click the clock, click the apps you work in, click the clock again. Go.
+A setup window walks you through the rest: permissions, your email,
+your start time, and joining your friends' board. Takes a minute.
 
 EOF

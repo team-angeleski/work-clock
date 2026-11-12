@@ -2,7 +2,7 @@
 # Builds WorkClock.app next to this script.
 set -euo pipefail
 cd "${0:A:h}"
-VERSION="1.2"
+VERSION="1.3"
 
 APP=build/WorkClock.app
 rm -rf "$APP"

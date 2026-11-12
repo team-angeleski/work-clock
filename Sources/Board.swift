@@ -18,6 +18,9 @@ struct Friend: Decodable, Identifiable, Equatable {
     let yesterday: Int   // yesterday's score
     let week: Int        // last 7 days' score
     let taunted_today: Int
+    var late: Int? = nil       // minutes late today (costs a point each)
+    var due_min: Int? = nil    // clock-in time in minutes after midnight, nil on a day off
+    var in_min: Int? = nil     // when they clocked in today
 }
 
 struct Taunt: Decodable, Identifiable, Equatable {
@@ -31,6 +34,16 @@ private struct BoardState: Decodable {
     let taunts_left: Int
     let members: [Friend]
     let incoming: [Taunt]
+    let me: MeInfo?
+}
+
+private struct MeInfo: Decodable {
+    let email: String?
+    let start_min: Int
+    let workdays: Int
+    let next_start_min: Int?
+    let next_workdays: Int?
+    let next_from: String?
 }
 
 private struct Joined: Decodable { let member_id: UUID; let secret: UUID; let code: String }
@@ -45,6 +58,8 @@ final class Board {
     private(set) var lastSynced: Date?
     /// The taunt currently popping up on screen.
     private(set) var showing: Taunt?
+    /// Where my email alerts go (nil = off).
+    private(set) var email: String?
 
     var memberID: UUID? { defaults.string(forKey: "boardMember").flatMap(UUID.init) }
     var joined: Bool { memberID != nil }
@@ -52,16 +67,31 @@ final class Board {
     var me: Friend? { friends.first { $0.id == memberID } }
     var others: [Friend] { friends.filter { $0.id != memberID } }
 
+    /// Minutes late today, as the server counts them (live locally until clocked in).
+    var myLate: Int {
+        guard let store else { return 0 }
+        let server = me?.late ?? 0
+        guard me?.due_min != nil else { return 0 }
+        return max(server, store.office.lateMinutes(now: store.now, clockedIn: store.clockedIn))
+    }
+
+    /// My live score after the lateness penalty.
+    var myScore: Int {
+        guard let store else { return 0 }
+        return max(me?.score ?? 0, max(0, Int(store.todayScore) - myLate * 60))
+    }
+
     /// The race with my own row using my live numbers (the server's copy lags a few minutes).
     var ranked: [Friend] {
         guard let store else { return friends }
         return friends.map { f in
             guard f.id == memberID else { return f }
+            let score = myScore
             return Friend(id: f.id, name: f.name, level: store.level, streak: store.streak,
                           focusing: store.mode == .running && store.onTask,
-                          today: max(f.today, Int(store.today)), score: max(f.score, Int(store.todayScore)),
-                          yesterday: f.yesterday, week: f.week - f.score + max(f.score, Int(store.todayScore)),
-                          taunted_today: f.taunted_today)
+                          today: max(f.today, Int(store.today)), score: score,
+                          yesterday: f.yesterday, week: f.week - f.score + score,
+                          taunted_today: f.taunted_today, late: myLate, due_min: f.due_min, in_min: f.in_min)
         }
         .sorted { $0.score != $1.score ? $0.score > $1.score : $0.name < $1.name }
     }
@@ -110,7 +140,7 @@ final class Board {
     /// "15m to beat Cung", "Leading Cung by 20m", or nil when alone.
     var raceLine: String? {
         guard let store, joined, !others.isEmpty else { return nil }
-        let mine = Int(store.todayScore)
+        let mine = myScore
         let rate = store.scoreRate
         let ranked = others.sorted { $0.score > $1.score }
         if let ahead = ranked.filter({ $0.score >= mine }).last {
@@ -121,7 +151,7 @@ final class Board {
         return "Leading \(short(second.name)) by \(minutes(Double(mine - second.score)))"
     }
 
-    var leading: Bool { others.allSatisfy { Int(store?.todayScore ?? 0) > $0.score } && !others.isEmpty }
+    var leading: Bool { others.allSatisfy { myScore > $0.score } && !others.isEmpty }
 
     private func short(_ name: String) -> String {
         let first = name.split(separator: " ").first.map(String.init) ?? name
@@ -135,16 +165,17 @@ final class Board {
 
     // MARK: Actions
 
-    func create(name: String) async { await join(code: nil, name: name) }
-
-    func join(code: String?, name: String) async {
+    
+    func join(code: String?, name: String, email: String, start: Int, days: Int) async {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { error = "Add your name first"; return }
         busy = true; defer { busy = false }
         do {
             let data = code == nil
-                ? try await call("focus_create", ["p_name": name, "p_platform": "mac"])
-                : try await call("focus_join", ["p_code": code, "p_name": name, "p_platform": "mac"])
+                ? try await call("focus_create", ["p_name": name, "p_platform": "mac", "p_email": email,
+                                                  "p_start_min": start, "p_workdays": days])
+                : try await call("focus_join", ["p_code": code, "p_name": name, "p_platform": "mac", "p_email": email,
+                                                "p_start_min": start, "p_workdays": days])
             let j = try JSONDecoder().decode(Joined.self, from: data)
             defaults.set(j.member_id.uuidString, forKey: "boardMember")
             defaults.set(j.secret.uuidString, forKey: "boardSecret")
@@ -173,6 +204,33 @@ final class Board {
         } catch { self.error = describe(error) }
     }
 
+    /// On a board but no email yet (accounts from before 1.3): setup asks for one.
+    var needsEmail: Bool { joined && lastSynced != nil && email == nil }
+
+    /// Where alerts go. Required; it can be changed but not removed.
+    func setEmail(_ value: String) async {
+        let v = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !v.isEmpty else { error = "An email is required"; return }
+        busy = true; defer { busy = false }
+        do {
+            _ = try await call("focus_set_email", ["p_member": memberID?.uuidString, "p_secret": secret?.uuidString, "p_email": v])
+            error = nil
+            store?.announce("Email saved", sound: "Pop")
+            await sync()
+        } catch { self.error = describe(error) }
+    }
+
+    /// Clock-in time and workdays. The server applies it from tomorrow.
+    func setSchedule(start: Int, days: Int) async {
+        guard joined else { return }
+        do {
+            _ = try await call("focus_schedule", ["p_member": memberID?.uuidString, "p_secret": secret?.uuidString,
+                                                  "p_start_min": start, "p_workdays": days])
+            error = nil
+            await sync()
+        } catch { self.error = describe(error) }
+    }
+
     func leave() async {
         _ = try? await call("focus_leave", ["p_member": memberID?.uuidString, "p_secret": secret?.uuidString])
         forget()
@@ -180,7 +238,7 @@ final class Board {
 
     private func forget() {
         for k in ["boardMember", "boardSecret", "boardCode"] { defaults.removeObject(forKey: k) }
-        friends = []; code = nil; tauntsLeft = 0; queue = []; scheduled = []
+        friends = []; code = nil; tauntsLeft = 0; queue = []; scheduled = []; email = nil
     }
 
     /// The command a friend pastes into Terminal to install and join.
@@ -217,6 +275,11 @@ final class Board {
             friends = s.members
             code = s.code
             tauntsLeft = s.taunts_left
+            if let m = s.me {
+                email = m.email
+                store.office.adopt(start: m.start_min, days: m.workdays, nextStart: m.next_start_min,
+                                   nextDays: m.next_workdays, from: m.next_from)
+            }
             lastSynced = Date()
             error = nil
             schedule(s.incoming)

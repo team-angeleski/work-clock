@@ -52,6 +52,10 @@ final class Store {
 
     // UI
     var pressed = false
+    let office = Office()
+
+    /// Clocked in = the first 5 focused minutes of the day are done.
+    var clockedIn: Bool { today >= Office.clockInSeconds }
     @ObservationIgnored weak var board: Board?
 
     /// Friends' pranks and board events surface here.
@@ -104,10 +108,10 @@ final class Store {
     // MARK: Actions
 
     /// The single pill click: idle → pick apps → focus → stop.
-    /// One click starts with your usual apps; pass `repick` (Option-click) to choose again.
-    func primaryAction(repick: Bool = false) {
+    /// Every start goes through picking; tapping again without picking reuses last time's apps.
+    func primaryAction() {
         switch mode {
-        case .idle: picked.isEmpty || repick ? beginPicking() : start()
+        case .idle: beginPicking()
         case .picking: start()
         case .running: stop()
         }
@@ -429,6 +433,7 @@ final class Store {
         let t = Date()
         guard t.timeIntervalSince(lastDistractionCheck) >= 5 else { return }
         lastDistractionCheck = t
+        office.promote()
         if Calendar.current.component(.hour, from: t) >= Self.cleanHour {
             let today = Board.day(t)
             if cleanAnnounced != today && cleanMorning(on: t) {
