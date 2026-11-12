@@ -67,7 +67,7 @@ Small pushes back to work, all as Mac notifications plus a shake of the clock:
 - **Drifting:** on a distraction site mid-session, the clock shakes at 20s and 60s and notifies you at 2 minutes. In any other non-work app: a shake at 90s, a notification at 5 minutes. Idle time never nags.
 - **Clock in:** a reminder 10 minutes before your start, a shake at your start time, and a nudge at 15 minutes late.
 - **Not started:** at your Mac for 15 minutes without starting, you get your rank and the race. Again at 90 minutes.
-- **Friends:** a notification when a friend starts focusing and you haven't (at most hourly), when someone overtakes you, and when you take the lead.
+- **Friends:** a notification within seconds when a friend starts working (once per 20 minutes per friend), when someone overtakes you, and when you take the lead. Taunts pop up straight away.
 - **Streak at risk:** at 8pm, if your goal isn't hit and you have a streak going.
 - **Recap:** at 9pm, today's time, rank, the race and tomorrow's goal.
 
