@@ -67,6 +67,8 @@ pub struct Board {
     pub can_pick: bool,
     pub unlocked: Vec<String>,
     pub can_unlock: bool,
+    /// When the friends' numbers were last fetched (full sync or inbox).
+    pub live_at: f64,
 }
 
 pub fn short(name: &str) -> String {
@@ -85,8 +87,21 @@ impl Board {
         self.friends.iter().find(|f| f.id.eq_ignore_ascii_case(m))
     }
 
-    pub fn others(&self, member: &Option<String>) -> Vec<&Friend> {
-        self.friends.iter().filter(|f| member.as_ref().map(|m| !f.id.eq_ignore_ascii_case(m)).unwrap_or(true)).collect()
+    /// Everyone but me, with live numbers.
+    pub fn others(&self, member: &Option<String>) -> Vec<Friend> {
+        self.friends.iter().filter(|f| member.as_ref().map(|m| !f.id.eq_ignore_ascii_case(m)).unwrap_or(true))
+            .map(|f| self.live(f)).collect()
+    }
+
+    /// A focusing friend's clock runs on between fetches (for up to 3 minutes), so the race is live.
+    pub fn live(&self, f: &Friend) -> Friend {
+        let mut g = f.clone();
+        if f.focusing {
+            let add = (clock::now() - self.live_at).clamp(0.0, 180.0) as i64;
+            g.today += add;
+            g.score += add;
+        }
+        g
     }
 
     /// Yesterday's winner(s), by score.
@@ -105,7 +120,7 @@ impl Board {
             let gap = (ahead.score - mine) as f64 / rate;
             return Some(format!("{} to beat {}", minutes(gap + 60.0), short(&ahead.name)));
         }
-        let second = ranked[0];
+        let second = &ranked[0];
         Some(format!("Leading {} by {}", short(&second.name), minutes((mine - second.score) as f64)))
     }
 

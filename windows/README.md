@@ -46,7 +46,7 @@ The counting rules are a straight port of `Sources/Store.swift`, so both compute
 | Sleep stops the clock | sleep notification | a gap of more than 30 s between ticks stops the session at the last tick |
 | Distraction sites before 1pm blow the clean morning | ✓ | ✓ |
 | Office hours, late penalty, sites closed until clock-in | ⌘W to the browser | Ctrl+W to the browser |
-| Sync | every 2 min running / 5 min idle, and at 8:59 and 12:59 | same |
+| Sync | every 30 s running / 5 min idle, and at 8:59 and 12:59; a small inbox check every 20 s (taunts, friends starting, live race numbers) | same |
 
 Each computer reports its own seconds for the day with its own device id (`focus_sync` with `p_device` and `p_blown`); the server adds them up and holds each computer to real time. The Windows app registers as platform `windows`.
 

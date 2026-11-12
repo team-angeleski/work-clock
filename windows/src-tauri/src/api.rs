@@ -178,6 +178,10 @@ pub fn set_character(member: &str, secret: &str, character: &str, day: &str, nam
     call("focus_set_character", json!({"p_member": member, "p_secret": secret, "p_character": character, "p_day": day, "p_name": name})).map(|_| ())
 }
 
+/// Everyone's numbers right now, from the 20-second inbox.
+#[derive(Deserialize, Debug)]
+pub struct Live { pub id: String, pub today: i64, pub score: i64, pub focusing: bool }
+
 #[derive(Deserialize, Debug)]
 pub struct InboxEvent { pub kind: String, pub from_name: String, pub today: i64 }
 
@@ -188,6 +192,8 @@ pub struct Inbox {
     pub taunts: Vec<Taunt>,
     #[serde(default)]
     pub events: Vec<InboxEvent>,
+    #[serde(default)]
+    pub live: Option<Vec<Live>>,
 }
 
 /// A tiny check every 20 seconds, separate from the full sync. Events are handed over once.

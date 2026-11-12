@@ -83,7 +83,7 @@ impl Core {
         let today = self.engine.today() as i64;
         let member = self.settings.member.clone();
         let mut v: Vec<Friend> = self.board.friends.iter().map(|f| {
-            if member.as_ref().map(|m| f.id.eq_ignore_ascii_case(m)) != Some(true) { return f.clone(); }
+            if member.as_ref().map(|m| f.id.eq_ignore_ascii_case(m)) != Some(true) { return self.board.live(f); }
             Friend { level, streak, focusing, today: f.today.max(today), score, week: f.week - f.score + score, late: Some(late), ..f.clone() }
         }).collect();
         v.sort_by(|a, b| b.score.cmp(&a.score).then(a.name.cmp(&b.name)));
@@ -100,11 +100,11 @@ impl Core {
 
     // MARK: Sync
 
-    /// Every 2 minutes while focusing, every 5 otherwise; and just before 9am and 1pm, since the
+    /// Every 30 seconds while focusing, every 5 minutes otherwise; and just before 9am and 1pm, since the
     /// server only credits bonus time it saw before the cut-off.
     pub fn sync_due(&self) -> bool {
         if !self.joined() { return false; }
-        let every = if std::env::var("WORKCLOCK_FAST_SYNC").is_ok() { 15.0 } else if self.engine.mode == Mode::Running { 120.0 } else { 300.0 };
+        let every = if std::env::var("WORKCLOCK_FAST_SYNC").is_ok() { 15.0 } else if self.engine.mode == Mode::Running { 30.0 } else { 300.0 };
         let since = now() - self.board.last_sync_attempt;
         let h = clock::hour(now());
         let cutoff = (h == 8 || h == 12) && clock::minute(now()) == 59 && since > 45.0;
@@ -128,6 +128,7 @@ impl Core {
         match r {
             Ok(s) => {
                 self.board.friends = s.members;
+                self.board.live_at = now();
                 self.settings.code = Some(s.code);
                 self.board.taunts_left = s.taunts_left;
                 self.board.can_pick = s.can_pick_character.unwrap_or(false);
@@ -241,6 +242,18 @@ impl Core {
     /// The 20-second inbox: taunts queue at once; each friend who just started gets a notice.
     pub fn apply_inbox(&mut self, inbox: api::Inbox) {
         self.board.schedule(inbox.taunts);
+        // Friends' numbers every 20 seconds (my own row stays mine: it's live here already).
+        if let Some(live) = inbox.live {
+            let me = self.settings.member.clone().unwrap_or_default();
+            for f in self.board.friends.iter_mut().filter(|f| !f.id.eq_ignore_ascii_case(&me)) {
+                if let Some(l) = live.iter().find(|l| l.id.eq_ignore_ascii_case(&f.id)) {
+                    f.today = l.today;
+                    f.score = l.score;
+                    f.focusing = l.focusing;
+                }
+            }
+            self.board.live_at = now();
+        }
         for e in inbox.events.into_iter().filter(|e| e.kind == "started") { self.friend_started(&e.from_name, e.today); }
     }
 
@@ -380,7 +393,7 @@ impl Core {
 
     /// After each board sync: friends blowing their clock-in. (Friends starting come through the inbox.)
     fn board_synced(&mut self) {
-        let others: Vec<Friend> = self.board.others(&self.settings.member).into_iter().cloned().collect();
+        let others: Vec<Friend> = self.board.others(&self.settings.member);
         for f in others.iter().filter(|f| f.due_min.is_some() && f.in_min.is_none() && f.late.unwrap_or(0) >= 15) {
             if !self.once(&format!("friendlate-{}", f.id)) { continue; }
             self.notify(&format!("{} hasn't clocked in", f.name),
