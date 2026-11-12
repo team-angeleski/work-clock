@@ -132,6 +132,7 @@ impl Core {
                 self.board.friends = s.members;
                 self.settings.code = Some(s.code);
                 self.board.taunts_left = s.taunts_left;
+                self.board.can_pick = s.can_pick_character.unwrap_or(false);
                 if let Some(m) = s.mine { self.engine.apply_remote(m.others_today as f64, &m.history); }
                 if let Some(m) = s.me {
                     self.board.email = m.email;
@@ -453,7 +454,10 @@ impl Core {
             "me": f.id.to_lowercase() == member, "champion": champs.contains(&f.id.to_lowercase()),
             "late": f.late.unwrap_or(0), "due": f.due_min.map(Office::text), "in": f.in_min.map(Office::text),
             "tauntedToday": f.taunted_today,
+            "character": f.character, "characterName": f.character_name,
         })).collect();
+        let my_character = self.board.me(&self.settings.member).and_then(|m| m.character.clone());
+        let my_character_name = self.board.me(&self.settings.member).and_then(|m| m.character_name.clone());
         let next_tier = self.engine.next_tier().map(|(n, t)| json!({"name": n, "needed": long(t)}));
         let late = self.my_late();
         let clocked_in = self.engine.clocked_in();
@@ -479,6 +483,7 @@ impl Core {
             "rank": engine::rank(p), "tier": engine::tier(p), "nextTier": next_tier,
             "level": level, "levelProgress": self.engine.level_progress(), "xpToNext": self.engine.xp_to_next(),
             "streak": streak, "week": week, "othersToday": long(self.engine.others_today), "hasOthers": self.engine.others_today > 0.0,
+            "character": my_character,
             "bump": self.bump_tick, "shake": self.shake_tick,
             "office": {
                 "start": o.start_min, "days": o.workdays, "plannedStart": o.planned_start(), "plannedDays": o.planned_days(),
@@ -489,7 +494,7 @@ impl Core {
                 "joined": self.joined(), "code": self.settings.code, "name": self.settings.name, "email": self.board.email,
                 "friends": friends, "tauntsLeft": self.board.taunts_left, "race": race, "error": self.board.error,
                 "busy": self.board.busy, "synced": self.board.last_synced.map(clock::time_text), "invite": self.settings.invite_code,
-                "showing": self.board.showing, "ideas": crate::board::IDEAS, "hasKey": api::has_key(),
+                "showing": self.board.showing, "canPick": self.board.can_pick, "characterName": my_character_name, "ideas": crate::board::IDEAS, "hasKey": api::has_key(),
                 "installCommand": self.settings.code.as_ref().map(|c| format!("& ([scriptblock]::Create((irm https://raw.githubusercontent.com/team-angeleski/work-clock/main/windows/install.ps1))) {c}")),
                 "macInstall": self.settings.code.as_ref().map(|c| format!("curl -fsSL https://raw.githubusercontent.com/team-angeleski/work-clock/main/install.sh | bash -s {c}")),
             },

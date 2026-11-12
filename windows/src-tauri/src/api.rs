@@ -24,6 +24,11 @@ pub struct Friend {
     pub late: Option<i64>,
     pub due_min: Option<i64>,
     pub in_min: Option<i64>,
+    /// Yesterday's winner's costume for today, and what they named it.
+    #[serde(default)]
+    pub character: Option<String>,
+    #[serde(default)]
+    pub character_name: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Debug, serde::Serialize)]
@@ -50,6 +55,9 @@ pub struct BoardState {
     pub incoming: Vec<Taunt>,
     pub me: Option<MeInfo>,
     pub mine: Option<Mine>,
+    /// I won yesterday, so I get to pick today's character.
+    #[serde(default)]
+    pub can_pick_character: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -157,6 +165,12 @@ pub fn taunt(member: &str, secret: &str, target: &str, message: &str, day: &str)
 
 pub fn seen(member: &str, secret: &str, taunt: &str) -> Result<(), ApiError> {
     call("focus_seen", json!({"p_member": member, "p_secret": secret, "p_taunt": taunt})).map(|_| ())
+}
+
+/// The winner dresses up for the day, optionally with their own name for the character.
+pub fn set_character(member: &str, secret: &str, character: &str, day: &str, name: Option<&str>) -> Result<(), ApiError> {
+    let name: Option<String> = name.map(|n| n.trim().chars().take(24).collect::<String>()).filter(|n| !n.is_empty());
+    call("focus_set_character", json!({"p_member": member, "p_secret": secret, "p_character": character, "p_day": day, "p_name": name})).map(|_| ())
 }
 
 pub fn set_email(member: &str, secret: &str, email: &str) -> Result<(), ApiError> {

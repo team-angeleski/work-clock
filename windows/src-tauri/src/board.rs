@@ -63,6 +63,8 @@ pub struct Board {
     pub pending: Vec<(f64, Taunt)>,
     pub next_show_at: f64,
     pub last_lead: Option<bool>,
+    /// I won yesterday, so I get to pick today's character.
+    pub can_pick: bool,
 }
 
 pub fn short(name: &str) -> String {
@@ -128,6 +130,7 @@ impl Board {
         self.scheduled.clear();
         self.email = None;
         self.last_synced = None;
+        self.can_pick = false;
     }
 }
 

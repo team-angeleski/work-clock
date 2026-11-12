@@ -48,6 +48,14 @@
   .line { display: flex; gap: 8px; margin-top: 8px; }
   .code { font-family: Consolas, monospace; font-size: 11px; background: rgba(0,0,0,.3); border-radius: 8px; padding: 8px; word-break: break-all; user-select: text; color: var(--dim); }
   .boardcode { font-size: 22px; font-weight: 700; letter-spacing: 3px; }
+  .picker { background: rgba(255, 210, 94, 0.09); }
+  .picker h3 { color: var(--gold); text-transform: none; letter-spacing: 0; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .grid button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px 5px; background: rgba(255,255,255,.04); border-radius: 9px; }
+  .grid button.on { background: rgba(255, 210, 94, 0.25); }
+  .grid span { font-size: 9.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .quote { font-family: Georgia, serif; font-style: italic; text-align: center; margin: 10px 0 2px; font-size: 13.5px; }
+  .badge { margin-left: 5px; }
   footer { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: 11px; }
   footer button { padding: 4px 10px; font-size: 12px; }
   .hidden { display: none !important; }
@@ -109,6 +117,14 @@
         <h3>Friend board</h3>
         <p class="dim" style="margin:0 0 10px">Race up to 4 friends on focus score. Whoever wins the day gets 3 taunts.</p>
         <button class="primary" onclick="invoke('open_setup')">Join or create a board</button>
+      </div>
+      <div id="pickCard" class="card picker hidden">
+        <h3 id="pickTitle">🎭 You won yesterday. Pick your character for today</h3>
+        <div class="grid" id="pickGrid"></div>
+        <div class="quote hidden" id="pickLine"></div>
+        <div class="line"><input id="pickName" maxlength="24" placeholder="Nickname (optional)"><button id="pickSave" class="hidden" onclick="pick(state.character)">Save</button></div>
+        <div class="faint" style="font-size:11px;margin-top:6px">Your clock wears it today, and your friends see it next to your name.</div>
+        <div class="err" id="pickErr"></div>
       </div>
       <div id="raceCard" class="card">
         <h3 id="raceTitle">Today's race</h3>
@@ -175,7 +191,7 @@
     <button class="ghost" onclick="invoke('quit')">Quit</button>
   </footer>
 </div>
-<script src="common.js"></script>
+<script src="characters.js"></script><script src="common.js"></script>
 <script>
 let state = null, tab = "today", editing = false, days = null, hydrated = false;
 
@@ -232,10 +248,25 @@ onState(s => {
   $("#friends").innerHTML = b.friends.map((f, i) => `
     <div class="friend ${f.me ? "me" : ""}">
       <div class="pos">${f.champion ? "👑" : i + 1}</div>
-      <div class="who"><b>${esc(f.name)}${f.me ? " (you)" : ""}</b>${f.focusing ? '<span class="dot" title="Focusing now"></span>' : ""}
-        <small>${f.today} focused · Lv ${f.level}${f.streak ? ` · 🔥${f.streak}` : ""}${f.late ? ` · <span class="late">${f.late}m late</span>` : f.in ? ` · in ${f.in}` : f.due ? ` · due ${f.due}` : ""}</small></div>
+      <div class="who"><b>${esc(f.name)}${f.me ? " (you)" : ""}</b>${charBadge(f)}${f.focusing ? '<span class="dot" title="Focusing now"></span>' : ""}
+        <small>${charTitle(f) ? `${esc(charTitle(f))} · ` : ""}${f.today} focused · Lv ${f.level}${f.streak ? ` · 🔥${f.streak}` : ""}${f.late ? ` · <span class="late">${f.late}m late</span>` : f.in ? ` · in ${f.in}` : f.due ? ` · due ${f.due}` : ""}</small></div>
       <div class="score">${f.scoreText}</div>
     </div>`).join("") || `<div class="dim">Just you so far. Invite a friend below.</div>`;
+  // Yesterday's winner picks today's character.
+  $("#pickCard").classList.toggle("hidden", !(b.joined && b.canPick));
+  if (b.canPick) {
+    const mine = s.character && CHARACTER[s.character];
+    $("#pickTitle").textContent = mine ? `🎭 Today you're ${b.characterName || mine.name}` : "🎭 You won yesterday. Pick your character for today";
+    if (pickedShown !== s.character || !$("#pickGrid").innerHTML) {
+      pickedShown = s.character;
+      $("#pickGrid").innerHTML = CHARACTERS.map(c => `<button class="${c.id === s.character ? "on" : ""}" data-id="${c.id}" title="${esc(c.name)}">${characterFace(c.id, 30)}<span>${esc(c.name)}</span></button>`).join("");
+      document.querySelectorAll("#pickGrid button").forEach(x => x.onclick = () => pick(x.dataset.id));
+    }
+    $("#pickLine").classList.toggle("hidden", !mine);
+    $("#pickLine").textContent = mine ? `“${mine.line}”` : "";
+    $("#pickSave").classList.toggle("hidden", !mine);
+    document.querySelectorAll("#pickGrid button").forEach(x => x.disabled = b.busy);
+  }
   $("#synced").textContent = b.error ? b.error : b.synced ? `Updated ${b.synced}` : "Connecting…";
   $("#tauntCard").classList.toggle("hidden", !(b.joined && b.tauntsLeft > 0));
   $("#tauntsLeft").textContent = b.tauntsLeft;
@@ -297,6 +328,15 @@ function sendTaunt() {
   $("#tauntErr").textContent = "";
   invoke("taunt", { id, name: f ? f.name : "", message: $("#tauntMsg").value })
     .then(() => $("#tauntMsg").value = "").catch(e => $("#tauntErr").textContent = e);
+}
+let pickedShown;
+function charTitle(f) { const c = f.character && CHARACTER[f.character]; return c ? (f.characterName || c.name) : ""; }
+function charBadge(f) { const c = f.character && CHARACTER[f.character]; return c ? `<span class="badge" title="${esc(charTitle(f))}">${c.badge}</span>` : ""; }
+function pick(id) {
+  const c = CHARACTER[id]; if (!c) return;
+  $("#pickErr").textContent = "";
+  const name = $("#pickName").value.trim();
+  invoke("set_character", { id, name: name || null, line: c.line }).catch(e => $("#pickErr").textContent = e);
 }
 function signOut() { if (confirm("Stop counting this PC toward your account? Your other computers carry on.")) invoke("sign_out"); }
 function leave() { if (confirm("Delete your account everywhere? Your friends will see you leave. This can't be undone.")) invoke("leave"); }

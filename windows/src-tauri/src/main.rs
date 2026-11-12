@@ -230,6 +230,19 @@ async fn taunt(s: St<'_>, id: String, name: String, message: String) -> Result<(
     Ok(())
 }
 
+/// Yesterday's winner picks today's character. Its line shows on this screen only, with no sound.
+#[tauri::command]
+async fn set_character(s: St<'_>, id: String, name: Option<String>, line: String) -> Result<(), String> {
+    let (m, x) = creds(&s)?;
+    busy(&s, true);
+    let r = blocking(move || api::set_character(&m, &x, &id, &clock::day_key(clock::now()), name.as_deref())).await;
+    busy(&s, false);
+    r.map_err(|e| e.text())?;
+    s.core.lock().unwrap().engine.show(&format!("“{line}”"), 6.0);
+    s.nudge();
+    Ok(())
+}
+
 #[tauri::command]
 async fn set_email(s: St<'_>, email: String) -> Result<(), String> {
     let v = email.trim().to_string();
@@ -485,7 +498,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             state, primary, quick, change_apps, cancel_picking, remove_picked, dismiss_taunt, set_goal, set_idle_pause,
             set_lock, get_autostart, set_autostart, setup_done, open_panel, hide_panel, open_setup, quit, run_update,
-            send_code, sign_in, join, taunt, set_email, set_schedule, sign_out, leave
+            send_code, sign_in, join, taunt, set_character, set_email, set_schedule, sign_out, leave
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
