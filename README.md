@@ -52,7 +52,7 @@ Working from home, nobody's waiting for you at 9. Office hours fix that:
 
 ## Several computers
 
-Your email is your account. On another computer, install Work Clock and choose **Sign in** in setup: a 6-digit code is emailed to you. Every computer reports its own time and the server adds them up, so your clock, week, streak and the race show your total. A computer can only add as much as real time allows since it last checked in, and a day can never hold more than the hours since midnight.
+Your email is your account. On another computer (Mac or Windows), install Darnell Jr. and choose **Sign in** in setup: a 6-digit code is emailed to you. Every computer reports its own time and the server adds them up, so your clock, week, streak and the race show your total. A computer can only add as much as real time allows since it last checked in, and a day can never hold more than the hours since midnight.
 
 Settings → Account → **Sign Out** stops counting that one computer; **Delete** removes the account everywhere.
 
