@@ -1,7 +1,7 @@
 //! The clock: what counts as focus, XP, goals and the score. A line-for-line port of the Mac
 //! app's Store.swift, so both computers count by the same rules:
 //! - only the apps/sites you picked, while they're in front;
-//! - idle 2 minutes = away; on a board, also no key press, click or scroll for 10 minutes;
+//! - idle 30 seconds = away; on a board, also no key press, click or scroll for 10 minutes;
 //! - the away stretch is handed back; sessions split at midnight; sleep stops the clock.
 
 use crate::clock::{self, now};
@@ -9,7 +9,7 @@ use crate::office::{Office, CLOCK_IN_SECONDS};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-pub const IDLE_LIMIT: f64 = 120.0;
+pub const IDLE_LIMIT: f64 = 30.0;
 pub const HANDS_LIMIT: f64 = 600.0;
 const COMBO_BREAK: f64 = 15.0;
 pub const EARLY_HOUR: u32 = 9;
@@ -747,6 +747,18 @@ mod tests {
         assert!(!e.on_task);
         let t = e.local_today();
         assert!((t - 120.0).abs() < 3.0, "kept {t}");
+    }
+
+    #[test]
+    fn thirty_seconds_idle_is_away() {
+        let mut e = running(&["code.exe"]);
+        let mut s = Fake { front: "code.exe".into(), idle: 25.0, hands: 0.0, domain: None };
+        e.tick(&mut s);
+        assert!(e.on_task);
+        s.idle = 35.0;
+        e.tick(&mut s);
+        assert!(!e.on_task);
+        assert_eq!(e.off_reason.as_deref(), Some("Away"));
     }
 
     #[test]

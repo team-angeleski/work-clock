@@ -42,7 +42,7 @@ The counting rules are a straight port of `Sources/Store.swift`, so both compute
 |---|---|---|
 | Only picked apps count | front app's bundle id | front window's exe (`code.exe`); Store apps resolved past ApplicationFrameHost |
 | Sites in browsers | AppleScript reads the tab URL | UI Automation reads the address bar (Chrome, Edge, Brave, Firefox, Opera, Vivaldi, Arc) |
-| Idle 2 min = away, time handed back | `CGEventSource` | `GetLastInputInfo` |
+| Idle 30 s = away, time handed back | `CGEventSource` | `GetLastInputInfo` |
 | On a board: no key, click or scroll for 10 min = away | `CGEventSource` key/click/scroll | Raw Input key-down, left-click, wheel |
 | Split at midnight | ✓ | ✓ |
 | Sleep stops the clock | sleep notification | a gap of more than 30 s between ticks stops the session at the last tick |

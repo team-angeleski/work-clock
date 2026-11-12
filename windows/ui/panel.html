@@ -160,7 +160,7 @@
         <h3>Daily goal</h3>
         <div class="row"><div class="grow">Grow with me (recent average + 15m)</div><div class="toggle" id="autoGoal"></div></div>
         <div class="row" id="hoursRow"><div class="grow">Hours a day</div><input id="goalHours" type="number" min="0.5" max="12" step="0.5" style="width:80px"></div>
-        <div class="row" id="idleRow"><div class="grow">Pause when idle 2 minutes</div><div class="toggle" id="idlePause"></div></div>
+        <div class="row" id="idleRow"><div class="grow">Pause after 30 seconds idle (always on with friends)</div><div class="toggle" id="idlePause"></div></div>
         <div class="faint" id="idleNote" style="font-size:11px"></div>
       </div>
       <div class="card">
@@ -303,7 +303,8 @@ onState(s => {
   $("#autoGoal").classList.toggle("on", s.autoGoal);
   $("#hoursRow").classList.toggle("hidden", s.autoGoal);
   $("#idlePause").classList.toggle("on", s.idlePause || b.joined);
-  $("#idleNote").textContent = b.joined ? "Always on while you're on a board, plus: no key, click or scroll for 10 minutes and that time is handed back." : "";
+  $("#idleNote").textContent = "No mouse or keyboard for 30 seconds and the time is handed back." +
+    (b.joined ? " On a board, also: no key, click or scroll for 10 minutes." : "");
   $("#lock").classList.toggle("on", s.office.lock);
   const o = s.office;
   $("#officeNote").textContent = o.pending ? `Changes start ${o.pending}: ${timeText(o.plannedStart)}.` : "Changes start tomorrow, so today can't be pushed back once you're late. Late costs a point a minute after 5 minutes.";
