@@ -353,7 +353,44 @@ final class Store {
     /// Closed-session totals per day. Only changes when a session closes, so cache it.
     @ObservationIgnored private var dayCache: [Date: TimeInterval] = [:]
 
+    // MARK: Your other computers
+    // The server adds up every computer signed in to your account. Past days: whichever is larger,
+    // this Mac's own record or the account's. Today: this Mac's live time plus what the others added.
+
+    private(set) var othersToday: TimeInterval = 0
+    @ObservationIgnored private var othersDay = Date.distantPast
+    @ObservationIgnored private var remoteHistory: [Date: TimeInterval] = [:]
+
+    func applyRemote(othersToday: TimeInterval, history: [String: Int]) {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        var h: [Date: TimeInterval] = [:]
+        for (k, v) in history { if let d = f.date(from: k) { h[Calendar.current.startOfDay(for: d)] = TimeInterval(v) } }
+        remoteHistory = h
+        othersDay = Calendar.current.startOfDay(for: Date())
+        if self.othersToday != othersToday { self.othersToday = max(0, othersToday) }
+    }
+
+    /// Focus across all your computers.
     func total(on day: Date) -> TimeInterval {
+        let start = Calendar.current.startOfDay(for: day)
+        let mine = localTotal(on: day)
+        if start == othersDay { return mine + othersToday }
+        return max(mine, remoteHistory[start] ?? 0)
+    }
+
+    /// This Mac's own focus: what it reports to the server.
+    var localToday: TimeInterval { localTotal(on: now) }
+
+    /// A distraction site was opened before 1pm today (blows the clean-morning bonus on every computer).
+    var blownToday: Bool {
+        guard let first = distractions[Board.day(now)] else { return false }
+        return Calendar.current.component(.hour, from: first) < Self.cleanHour
+    }
+
+    func localTotal(on day: Date) -> TimeInterval {
         let start = Calendar.current.startOfDay(for: day)
         let end = start.addingTimeInterval(86400)
         let closed: TimeInterval

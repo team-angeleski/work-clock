@@ -35,7 +35,15 @@ private struct BoardState: Decodable {
     let members: [Friend]
     let incoming: [Taunt]
     let me: MeInfo?
+    let mine: Mine?
 }
+
+private struct Mine: Decodable {
+    let others_today: Int
+    let history: [String: Int]
+}
+
+private struct SignedIn: Decodable { let member_id: UUID?; let secret: UUID?; let code: String?; let name: String?; let error: String? }
 
 private struct MeInfo: Decodable {
     let email: String?
@@ -231,6 +239,53 @@ final class Board {
         } catch { self.error = describe(error) }
     }
 
+    // MARK: Signing in on another computer
+
+    /// Emails a 6-digit code to the account's address.
+    func sendCode(to email: String) async -> Bool {
+        busy = true; defer { busy = false }
+        do {
+            _ = try await call("focus_login_start", ["p_email": email.trimmingCharacters(in: .whitespacesAndNewlines)])
+            error = nil
+            return true
+        } catch { self.error = describe(error); return false }
+    }
+
+    /// Trades the code for the account; this computer then counts toward it.
+    func signIn(email: String, code: String) async -> Bool {
+        busy = true; defer { busy = false }
+        do {
+            let data = try await call("focus_login_finish", ["p_email": email.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                             "p_code": code.filter(\.isNumber)])
+            let r = try JSONDecoder().decode(SignedIn.self, from: data)
+            if let e = r.error { error = e; return false }
+            guard let id = r.member_id, let secret = r.secret else { error = "Couldn't sign in"; return false }
+            defaults.set(id.uuidString, forKey: "boardMember")
+            defaults.set(secret.uuidString, forKey: "boardSecret")
+            defaults.set(r.code, forKey: "boardCode")
+            defaults.set(r.name, forKey: "boardName")
+            defaults.removeObject(forKey: "inviteCode")
+            self.code = r.code
+            error = nil
+            store?.announce("Signed in as \(r.name ?? "you")", sound: "Glass")
+            await sync()
+            return true
+        } catch { self.error = describe(error); return false }
+    }
+
+    /// This computer, as one of possibly several on the account.
+    static var deviceID: String {
+        let d = UserDefaults.standard
+        if let id = d.string(forKey: "deviceID") { return id }
+        let id = UUID().uuidString
+        d.set(id, forKey: "deviceID")
+        return id
+    }
+
+    /// Stop counting this computer toward the account. The account and its other computers carry on.
+    func signOut() { forget() }
+
+    /// Deletes the account everywhere.
     func leave() async {
         _ = try? await call("focus_leave", ["p_member": memberID?.uuidString, "p_secret": secret?.uuidString])
         forget()
@@ -239,6 +294,7 @@ final class Board {
     private func forget() {
         for k in ["boardMember", "boardSecret", "boardCode"] { defaults.removeObject(forKey: k) }
         friends = []; code = nil; tauntsLeft = 0; queue = []; scheduled = []; email = nil
+        store?.applyRemote(othersToday: 0, history: [:])
     }
 
     /// The command a friend pastes into Terminal to install and join.
@@ -267,14 +323,16 @@ final class Board {
         do {
             let data = try await call("focus_sync", [
                 "p_member": memberID?.uuidString, "p_secret": secret?.uuidString,
-                "p_day": Self.day(), "p_seconds": Int(store.today), "p_score": Int(store.todayScore),
+                "p_day": Self.day(), "p_seconds": Int(store.localToday), "p_score": Int(store.todayScore),
                 "p_level": store.level, "p_streak": store.streak,
                 "p_focusing": store.mode == .running && store.onTask,
-                "p_tz_minutes": TimeZone.current.secondsFromGMT() / 60])
+                "p_tz_minutes": TimeZone.current.secondsFromGMT() / 60,
+                "p_device": Self.deviceID, "p_blown": store.blownToday])
             let s = try JSONDecoder().decode(BoardState.self, from: data)
             friends = s.members
             code = s.code
             tauntsLeft = s.taunts_left
+            if let m = s.mine { store.applyRemote(othersToday: TimeInterval(m.others_today), history: m.history) }
             if let m = s.me {
                 email = m.email
                 store.office.adopt(start: m.start_min, days: m.workdays, nextStart: m.next_start_min,

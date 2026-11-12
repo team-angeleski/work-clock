@@ -76,7 +76,7 @@ struct SetupView: View {
     var emailOnly = false
     var onFinish: () -> Void
 
-    enum Step: Int, CaseIterable { case welcome, permissions, you, office, board, done }
+    enum Step: Int, CaseIterable { case welcome, permissions, you, signIn, office, board, done }
 
     @State private var step: Step
     @State private var forward = true
@@ -85,6 +85,9 @@ struct SetupView: View {
     @State private var code = UserDefaults.standard.string(forKey: "inviteCode") ?? ""
     @State private var axOK = AXIsProcessTrusted()
     @State private var notifyOK = false
+    @State private var signingIn = false
+    @State private var codeSent = false
+    @State private var loginCode = ""
     @State private var startMin: Int
     @State private var days: Int
 
@@ -98,7 +101,10 @@ struct SetupView: View {
         _days = State(initialValue: store.office.plannedDays)
     }
 
-    private var steps: [Step] { emailOnly ? [.you, .office, .done] : Step.allCases }
+    private var steps: [Step] {
+        if emailOnly { return [.you, .office, .done] }
+        return signingIn ? [.welcome, .permissions, .signIn, .done] : [.welcome, .permissions, .you, .office, .board, .done]
+    }
     private let poll = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -132,6 +138,7 @@ struct SetupView: View {
             case .welcome: welcome
             case .permissions: permissions
             case .you: you
+            case .signIn: signIn
             case .office: office
             case .board: boardStep
             case .done: done
@@ -199,7 +206,72 @@ struct SetupView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Text("Nothing else. Never shared.").font(.footnote).foregroundStyle(.tertiary).padding(.top, 18)
+            if !emailOnly {
+                Button("Already use Work Clock on another computer? Sign in") {
+                    signingIn = true
+                    forward = true
+                    withAnimation(.smooth(duration: 0.35)) { step = .signIn }
+                }
+                .buttonStyle(.link).padding(.top, 10)
+            }
         }
+    }
+
+    private var signIn: some View {
+        VStack(spacing: 0) {
+            hero("laptopcomputer.and.arrow.down", .teal)
+            title("Sign in", "Same account on every computer. Your time adds up across all of them.")
+            VStack(spacing: 10) {
+                field("Email on your account", text: $email, submit: { Task { await sendCode() } })
+                    .disabled(codeSent)
+                if codeSent {
+                    TextField("", text: $loginCode, prompt: Text("6-digit code"))
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 26, weight: .semibold, design: .monospaced))
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.primary.opacity(0.06)))
+                        .onChange(of: loginCode) { _, v in
+                            if v.filter(\.isNumber).count == 6 { Task { await finishSignIn() } }
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            HStack(spacing: 14) {
+                if codeSent {
+                    Button { Task { await finishSignIn() } } label: { Text("Sign In").font(.headline).frame(width: 200) }
+                        .buttonStyle(.borderedProminent).controlSize(.extraLarge)
+                        .disabled(loginCode.filter(\.isNumber).count != 6 || board.busy)
+                    Button("Send again") { Task { await sendCode() } }.buttonStyle(.link).disabled(board.busy)
+                } else {
+                    Button { Task { await sendCode() } } label: { Text("Email Me a Code").font(.headline).frame(width: 200) }
+                        .buttonStyle(.borderedProminent).controlSize(.extraLarge)
+                        .disabled(!emailValid || board.busy)
+                }
+            }
+            .padding(.top, 18)
+            if let e = board.error { Text(e).font(.callout).foregroundStyle(.red).padding(.top, 10) }
+            if codeSent && board.error == nil {
+                Text("Check your email. The code works for 10 minutes.").font(.callout).foregroundStyle(.secondary).padding(.top, 10)
+            }
+            Button("New here? Set up a new account") {
+                signingIn = false; codeSent = false
+                forward = false
+                withAnimation(.smooth(duration: 0.35)) { step = .you }
+            }
+            .buttonStyle(.link).padding(.top, 22)
+        }
+        .animation(.smooth, value: codeSent)
+    }
+
+    private func sendCode() async {
+        guard emailValid else { return }
+        if await board.sendCode(to: email) { codeSent = true }
+    }
+
+    private func finishSignIn() async {
+        guard !board.busy else { return }
+        if await board.signIn(email: email, code: loginCode) { advance() } else { loginCode = "" }
     }
 
     private var office: some View {
@@ -276,7 +348,7 @@ struct SetupView: View {
         VStack(spacing: 12) {
             if step == .done {
                 primary("Start Focusing") { onFinish(); store.primaryAction() }
-            } else if step != .board {
+            } else if step != .board && step != .signIn {
                 primary(step == .permissions && !axOK ? "Skip for Now" : "Continue") { next() }
                     .disabled(!canContinue || board.busy)
             } else {
@@ -591,8 +663,15 @@ struct AccountSettings: View {
                     }
                     Text("They paste it into Terminal. It installs Work Clock and opens setup with your code filled in.")
                         .font(.caption).foregroundStyle(.secondary)
-                    LabeledContent("Leave the board") {
-                        Button(leaveArmed ? "Really leave?" : "Leave") {
+                }
+                Section("This Mac") {
+                    Text("Sign in with the same email on your other computers and your time adds up across all of them.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    LabeledContent("Stop counting this Mac") {
+                        Button("Sign Out") { board.signOut(); AppWindows.shared?.showSetup() }
+                    }
+                    LabeledContent("Delete account everywhere") {
+                        Button(leaveArmed ? "Really delete?" : "Delete…") {
                             if leaveArmed { Task { await board.leave() } } else {
                                 leaveArmed = true
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { leaveArmed = false }
