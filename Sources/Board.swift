@@ -47,6 +47,12 @@ private struct BoardState: Decodable {
     let can_unlock: Bool?
 }
 
+private struct Inbox: Decodable {
+    let taunts: [Taunt]
+    let events: [Event]
+    struct Event: Decodable { let kind: String; let from_name: String; let today: Int }
+}
+
 private struct Mine: Decodable {
     let others_today: Int
     let history: [String: Int]
@@ -149,7 +155,7 @@ final class Board {
         announcedDay = defaults.string(forKey: "boardAnnouncedDay") ?? ""
         // Light polling: every 2 minutes while focusing, every 5 otherwise. ~1 KB each.
         let t = Timer(timeInterval: 20, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.syncIfDue() }
+            MainActor.assumeIsolated { self?.syncIfDue(); self?.checkInbox() }
         }
         t.tolerance = 5
         RunLoop.main.add(t, forMode: .common)
@@ -345,6 +351,34 @@ final class Board {
         if since >= every || cutoff { Task { await sync() } }
     }
 
+    /// Taunts land within seconds: a tiny check every 20 seconds, separate from the full sync.
+    @ObservationIgnored private var checkingInbox = false
+    private func checkInbox() {
+        guard joined, !checkingInbox else { return }
+        checkingInbox = true
+        Task {
+            defer { checkingInbox = false }
+            guard let data = try? await call("focus_inbox", ["p_member": memberID?.uuidString, "p_secret": secret?.uuidString]),
+                  let inbox = try? JSONDecoder().decode(Inbox.self, from: data) else { return }
+            schedule(inbox.taunts)
+            for e in inbox.events where e.kind == "started" { friendStarted(e.from_name, today: e.today) }
+        }
+    }
+
+    /// A friend just started working: tell me straight away.
+    private func friendStarted(_ name: String, today: Int) {
+        guard let store else { return }
+        let theirs = long(Double(today))
+        if store.mode == .running {
+            notify("\(name) started too", "They're on \(theirs) today. You're on \(long(store.today)). Keep going.")
+            store.announce("\(short(name)) started too", sound: "Pop", seconds: 5)
+        } else {
+            notify("\(name) just started working", "They're on \(theirs) today. You're on \(long(store.today)). Your move.")
+            store.announce("\(short(name)) started. Your move", sound: "Funk", seconds: 6)
+        }
+        nudge()   // fresh race numbers
+    }
+
     /// Sync now (start, stop, wake) so friends see the live dot quickly.
     func nudge() { Task { await sync() } }
 
@@ -420,13 +454,11 @@ final class Board {
 
     // MARK: Taunts popping up
 
-    /// Each unseen taunt pops up at a random moment in the next 2–45 minutes, while I'm at the computer.
+    /// Each unseen taunt pops up right away, as long as I'm at the computer.
     private func schedule(_ incoming: [Taunt]) {
         for t in incoming where !scheduled.contains(t.id) {
             scheduled.insert(t.id)
-            // Hidden test switch: `defaults write local.workclock debugFastTaunts -bool YES`.
-            let delay = defaults.bool(forKey: "debugFastTaunts") ? 3 : Double.random(in: 120...2700)
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.enqueue(t) }
+            enqueue(t)
         }
     }
 
@@ -440,7 +472,7 @@ final class Board {
         // Only pop up when someone's actually there to see it.
         let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
         guard idle < 60 else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 120) { [weak self] in self?.showNext() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in self?.showNext() }   // pops up as soon as I'm back
             return
         }
         queue.removeFirst()
@@ -456,7 +488,7 @@ final class Board {
         guard showing != nil else { return }
         showing = nil
         onShowTaunt?(nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in self?.showNext() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.showNext() }
     }
 
     static func playPoop() {

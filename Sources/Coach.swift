@@ -182,15 +182,7 @@ final class Coach {
             guard once("friendlate-\(f.id)") else { continue }
             Notify.post("\(f.name) hasn't clocked in", "\(f.late ?? 15) minutes late and losing a point a minute. Get ahead.", id: "friendlate-\(f.id)")
         }
-        for f in board.others {
-            defer { friendWasFocusing[f.id] = f.focusing }
-            guard f.focusing, friendWasFocusing[f.id] == false else { continue }
-            // Only when I'm not already working, and at most once an hour per friend.
-            guard store.mode != .running, Date().timeIntervalSince(friendNoticed[f.id] ?? .distantPast) > 3600 else { continue }
-            friendNoticed[f.id] = Date()
-            Notify.post("\(f.name) just started focusing",
-                        "They're on \(long(Double(f.score))). You're on \(long(store.todayScore)). Your move.", id: "friend-\(f.id)")
-        }
+        _ = store   // "friend started" alerts now come instantly from Board.friendStarted
     }
 
     // MARK: 4. End-of-day recap at 9pm
