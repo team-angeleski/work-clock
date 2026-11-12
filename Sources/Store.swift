@@ -78,7 +78,7 @@ final class Store {
     private var flashTask: Task<Void, Never>?
     private var icons: [String: NSImage] = [:]
 
-    private let idleLimit = 120.0
+    private let idleLimit = 30.0   // no mouse or keyboard for 30s: not working
     private let comboBreak = 15.0
     private let selfID = Bundle.main.bundleIdentifier ?? "WorkClock"
     private let file: URL = {

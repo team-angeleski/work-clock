@@ -38,7 +38,7 @@ Needs Windows 10 or 11 (64-bit). Already have an account on your Mac? Choose **I
 - **Late:** −1 per minute late to clock in (see Office hours).
 - **Early bird:** focus before 9am counts 1.5×.
 - **Clean morning:** no Instagram, YouTube, TikTok, X, Reddit, Facebook, Netflix or Twitch before 1pm, plus at least an hour of focus by then: +30.
-- Idle for 2 minutes, or no key, click or scroll for 10 minutes, and the time is handed back.
+- No mouse or keyboard for 30 seconds, or no key, click or scroll for 10 minutes, and the time is handed back.
 - The server only accepts focus that fits in the real time since your last check-in.
 
 ## Office hours

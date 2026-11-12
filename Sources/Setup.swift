@@ -582,7 +582,7 @@ struct SettingsView: View {
                 }
             }
             Section("Counting") {
-                Toggle(board.joined ? "Pause after 2 minutes idle (always on with friends)" : "Pause after 2 minutes idle",
+                Toggle(board.joined ? "Pause after 30 seconds idle (always on with friends)" : "Pause after 30 seconds idle",
                        isOn: board.joined ? .constant(true) : $store.idlePause)
                     .disabled(board.joined)
                 LabeledContent("Apps and sites") {
@@ -618,7 +618,7 @@ struct SettingsView: View {
                 row("envelope.fill", "Friends get emailed when you pass them, and when you're 15 minutes late")
             }
             Section("Fair play") {
-                row("moon.zzz.fill", "Idle for 2 minutes and the time is handed back")
+                row("moon.zzz.fill", "No mouse or keyboard for 30 seconds and the time is handed back")
                 row("hand.tap.fill", "No key, click or scroll for 10 minutes and it's handed back too")
                 row("checkmark.shield.fill", "The server rejects focus that couldn't fit in the time that's passed")
             }

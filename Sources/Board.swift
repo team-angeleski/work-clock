@@ -168,7 +168,7 @@ final class Board {
         self.store = store
         code = defaults.string(forKey: "boardCode")
         announcedDay = defaults.string(forKey: "boardAnnouncedDay") ?? ""
-        // Light polling: every 2 minutes while focusing, every 5 otherwise. ~1 KB each.
+        // Full sync every 30s while focusing, every 5 minutes otherwise; a lighter inbox check every 20s.
         let t = Timer(timeInterval: 20, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.syncIfDue(); self?.checkInbox() }
         }
