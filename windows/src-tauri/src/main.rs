@@ -140,9 +140,22 @@ async fn open_setup(app: AppHandle) { show_setup(&app); }
 #[tauri::command]
 fn quit(app: AppHandle, s: St) { s.core.lock().unwrap().engine.save(); app.exit(0); }
 
-/// Runs the one-line installer again, which replaces this copy and reopens it.
+/// The Update button: install now.
 #[tauri::command]
-fn run_update() {
+fn run_update(s: St) { install_update(&s.core); }
+
+/// Runs the one-line installer again, which replaces this copy and reopens it. History and board
+/// stay. Once per run: if it fails, the next launch tries again. Builds on a Mac (dev) never update.
+fn install_update(core: &Arc<Mutex<Core>>) {
+    if !cfg!(windows) { return; }
+    {
+        let mut c = core.lock().unwrap();
+        if c.updating { return; }
+        c.updating = true;
+        c.settings.updated_from = Some(env!("CARGO_PKG_VERSION").to_string());
+        c.save_settings();
+        c.engine.save();
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -152,6 +165,17 @@ fn run_update() {
             .creation_flags(0x08000000)
             .spawn();
     }
+}
+
+/// "2.1.0" is newer than "2.0" (missing parts count as 0).
+fn newer(a: &str, b: &str) -> bool {
+    let p = |s: &str| s.split('.').map(|x| x.parse::<u32>().unwrap_or(0)).collect::<Vec<_>>();
+    let (x, y) = (p(a), p(b));
+    for i in 0..x.len().max(y.len()) {
+        let (l, r) = (x.get(i).copied().unwrap_or(0), y.get(i).copied().unwrap_or(0));
+        if l != r { return l > r; }
+    }
+    false
 }
 
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
@@ -449,17 +473,21 @@ fn sync_loop(core: Arc<Mutex<Core>>, rx: mpsc::Receiver<()>) {
     }
 }
 
+/// Checks for a newer release with a Windows build on launch and every hour, and installs it by
+/// itself the first minute no focus session is running (never mid-session). The Update button
+/// still installs straight away.
 fn update_loop(core: Arc<Mutex<Core>>) {
+    let mut last_check: Option<Instant> = None;
     loop {
-        if let Some(v) = api::latest_version() {
-            let newer = |a: &str, b: &str| {
-                let p = |s: &str| s.split('.').map(|x| x.parse::<u32>().unwrap_or(0)).collect::<Vec<_>>();
-                p(a) > p(b)
-            };
-            let mine = env!("CARGO_PKG_VERSION");
-            core.lock().unwrap().update = if newer(&v, mine) { Some(v) } else { None };
+        if last_check.map(|t| t.elapsed() >= Duration::from_secs(3600)).unwrap_or(true) {
+            last_check = Some(Instant::now());
+            if let Some(v) = api::latest_version() {
+                core.lock().unwrap().update = if newer(&v, env!("CARGO_PKG_VERSION")) { Some(v) } else { None };
+            }
         }
-        std::thread::sleep(Duration::from_secs(6 * 3600));
+        let ready = { let c = core.lock().unwrap(); c.update.is_some() && !c.updating && c.engine.mode == engine::Mode::Idle };
+        if ready { install_update(&core); }
+        std::thread::sleep(Duration::from_secs(60));
     }
 }
 
@@ -479,6 +507,16 @@ fn main() {
     if let Some(code) = invite {
         let mut c = core.lock().unwrap();
         if !c.joined() { c.settings.invite_code = Some(code); c.save_settings(); }
+    }
+
+    // Just updated: say so on the clock.
+    {
+        let mut c = core.lock().unwrap();
+        if let Some(from) = c.settings.updated_from.take() {
+            c.save_settings();
+            let now = env!("CARGO_PKG_VERSION");
+            if newer(now, &from) { c.engine.announce(&format!("Updated from {from} to {now}"), Some("glass"), 5.0); }
+        }
     }
 
     let core_setup = core.clone();
@@ -569,3 +607,14 @@ fn main() {
 
 #[allow(dead_code)]
 fn _senses_is_object_safe(_: &dyn Senses) {}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn versions_compare_by_number() {
+        assert!(super::newer("2.1.0", "2.0"));
+        assert!(super::newer("2.10", "2.9.9"));
+        assert!(!super::newer("2.0", "2.0.0"));
+        assert!(!super::newer("1.9", "2.0.0"));
+    }
+}

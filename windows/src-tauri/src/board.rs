@@ -25,6 +25,8 @@ pub struct Settings {
     pub setup_done: bool,
     #[serde(default)]
     pub autostart_off: bool,
+    /// The version an automatic update started from, so the next launch can say "Updated from X to Y".
+    pub updated_from: Option<String>,
 }
 
 impl Settings {

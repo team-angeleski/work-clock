@@ -22,6 +22,8 @@ The script downloads `WorkClock-Setup.exe` from the newest GitHub release that h
 
 You can also download `WorkClock-Setup.exe` from the [releases page](https://github.com/team-angeleski/work-clock/releases) and run it. It isn't code-signed, so Windows SmartScreen shows "Windows protected your PC": click **More info → Run anyway**. (The PowerShell line doesn't trigger this.)
 
+Updates install themselves: the app checks GitHub on launch and every hour, and installs a newer Windows build the first minute you're not in a focus session (never mid-session), then reopens and says "Updated from X to Y" on the clock. The panel's Update button installs straight away.
+
 Uninstall from Settings → Apps → Darnell Jr.
 
 ## Using it

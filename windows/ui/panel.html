@@ -313,7 +313,8 @@ onState(s => {
   $("#accCode").textContent = b.code || "";
   $("#ver").textContent = s.version;
   $("#update").classList.toggle("hidden", !s.update);
-  $("#update").textContent = `Update to ${s.update}`;
+  $("#update").textContent = s.updating ? "Updating…" : `Update to ${s.update}`;
+  $("#update").disabled = !!s.updating;
   if (!hydrated || !editing) {
     if (!hydrated) {
       $("#goalHours").value = s.goalHours;

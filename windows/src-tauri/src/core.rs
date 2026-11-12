@@ -24,6 +24,8 @@ pub struct Core {
     pub shake_tick: u64,
     pub bump_tick: u64,
     pub update: Option<String>,
+    /// An update install has been started this run (one attempt per run, never a retry loop).
+    pub updating: bool,
     pub idle_now: f64,
 }
 
@@ -39,7 +41,7 @@ impl Core {
             engine, board: Board::default(), settings, settings_path,
             off_start: None, shook: 0, notified: false, first_active: None, first_active_day: String::new(),
             last_lock_check: 0.0,
-            shake_tick: 0, bump_tick: 0, update: None, idle_now: 0.0,
+            shake_tick: 0, bump_tick: 0, update: None, updating: false, idle_now: 0.0,
         };
         c.save_settings();
         c
@@ -527,7 +529,7 @@ impl Core {
                 "installCommand": self.settings.code.as_ref().map(|c| format!("& ([scriptblock]::Create((irm https://raw.githubusercontent.com/team-angeleski/work-clock/main/windows/install.ps1))) {c}")),
                 "macInstall": self.settings.code.as_ref().map(|c| format!("curl -fsSL https://raw.githubusercontent.com/team-angeleski/work-clock/main/install.sh | bash -s {c}")),
             },
-            "update": self.update,
+            "update": self.update, "updating": self.updating,
             "version": env!("CARGO_PKG_VERSION"),
         })
     }
