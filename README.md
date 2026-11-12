@@ -14,6 +14,22 @@ curl -fsSL https://raw.githubusercontent.com/team-angeleski/work-clock/main/inst
 
 Needs macOS 15 or later, on an Apple Silicon or Intel Mac.
 
+### Windows
+
+Paste into PowerShell (Start → type "PowerShell" → Enter):
+
+```powershell
+irm https://raw.githubusercontent.com/team-angeleski/work-clock/main/windows/install.ps1 | iex
+```
+
+To join a friend's board straight away, put the code at the end instead:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/team-angeleski/work-clock/main/windows/install.ps1))) CODE
+```
+
+Needs Windows 10 or 11 (64-bit). Already have an account on your Mac? Choose **I have an account** in setup and sign in with the same email: both computers add up. See [windows/README.md](windows/README.md).
+
 ## How scoring works
 
 - 1 point per focused minute in the apps or sites you picked.
@@ -65,5 +81,7 @@ The panel shows an Update button when a new release is out. After updating, macO
 ./build.sh   # universal app in build/
 ./run.sh     # build, install to /Applications and relaunch
 ```
+
+`windows/build.sh` builds the Windows installer (`build/WorkClock-Setup.exe`) on a Mac; see [windows/README.md](windows/README.md).
 
 `server/focusboard.sql`, `server/office_hours.sql`, `server/email_required.sql` and `server/devices.sql` are the board's database, in order. `tools/set-mail-key.sh` copies the Resend key into Supabase Vault so emails can send. `server/anon.key` (not committed) holds the public Supabase key.

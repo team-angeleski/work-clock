@@ -1,0 +1,305 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Work Clock</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { padding: 6px; overflow: hidden; }
+  #wrap {
+    height: 100%; border-radius: 14px; background: var(--bg); border: 1px solid var(--line);
+    display: flex; flex-direction: column; overflow: hidden; backdrop-filter: blur(30px);
+  }
+  header { display: flex; align-items: center; gap: 14px; padding: 18px 18px 12px; }
+  header .big { font-size: 30px; font-weight: 650; letter-spacing: -.5px; line-height: 1; }
+  header .meta { font-size: 12px; color: var(--dim); margin-top: 5px; }
+  header .close { margin-left: auto; align-self: flex-start; padding: 4px 8px; }
+  nav { display: flex; gap: 4px; padding: 0 14px 10px; }
+  nav button { flex: 1; background: transparent; color: var(--dim); padding: 7px; font-weight: 600; }
+  nav button.on { background: var(--card-hi); color: var(--text); }
+  main { flex: 1; overflow-y: auto; padding: 0 14px 14px; }
+  main::-webkit-scrollbar { width: 6px; } main::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+  .card { background: var(--card); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .card h3 { margin: 0 0 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--faint); font-weight: 600; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+  .row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .val { color: var(--dim); font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--flow1), var(--flow2)); border-radius: 3px; }
+  .week { display: flex; align-items: flex-end; gap: 8px; height: 70px; }
+  .week div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+  .week span { width: 100%; border-radius: 5px; background: rgba(255,255,255,.14); min-height: 3px; }
+  .week .today span { background: linear-gradient(180deg, var(--flow1), var(--flow2)); }
+  .week b { font-size: 10px; color: var(--faint); font-weight: 600; }
+  .friend { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .friend:last-child { border: 0; }
+  .friend .pos { width: 16px; color: var(--faint); font-weight: 700; text-align: center; }
+  .friend .who { flex: 1; min-width: 0; }
+  .friend .who b { font-weight: 600; }
+  .friend .who small { display: block; color: var(--faint); font-size: 11px; }
+  .friend.me .who b { color: var(--flow1); }
+  .friend .score { font-weight: 650; font-variant-numeric: tabular-nums; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--goal); display: inline-block; margin-left: 5px; box-shadow: 0 0 8px var(--goal); }
+  .late { color: var(--bad); }
+  .chip { display: inline-block; background: var(--card-hi); border-radius: 12px; padding: 4px 9px; margin: 3px 4px 0 0; font-size: 12px; cursor: pointer; }
+  .chip:hover { background: rgba(255,255,255,.16); }
+  .apps .x { opacity: 0; padding: 2px 7px; background: transparent; color: var(--faint); }
+  .apps .row:hover .x { opacity: 1; }
+  .line { display: flex; gap: 8px; margin-top: 8px; }
+  .code { font-family: Consolas, monospace; font-size: 11px; background: rgba(0,0,0,.3); border-radius: 8px; padding: 8px; word-break: break-all; user-select: text; color: var(--dim); }
+  .boardcode { font-size: 22px; font-weight: 700; letter-spacing: 3px; }
+  footer { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: 11px; }
+  footer button { padding: 4px 10px; font-size: 12px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <div id="ring"></div>
+    <div>
+      <div class="big num" id="today">0m</div>
+      <div class="meta" id="meta"></div>
+    </div>
+    <button class="ghost close" onclick="invoke('hide_panel')">✕</button>
+  </header>
+  <nav>
+    <button data-tab="today" class="on">Today</button>
+    <button data-tab="race">Race</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+  <main>
+    <section id="tab-today">
+      <div class="card">
+        <div class="line" style="margin:0">
+          <button class="primary" id="startBtn" style="flex:1" onclick="invoke('primary')">Start</button>
+          <button id="appsBtn" onclick="invoke('change_apps'); invoke('hide_panel')">Change apps</button>
+        </div>
+        <div class="dim" id="hint" style="margin-top:8px;font-size:12px"></div>
+      </div>
+      <div class="card">
+        <h3>Goal</h3>
+        <div class="row"><div class="grow" id="goalText"></div><div class="val" id="goalPct"></div></div>
+        <div class="bar"><i id="goalBar"></i></div>
+        <div class="row" style="margin-top:6px"><div class="grow dim" id="level"></div><div class="val" id="xp"></div></div>
+        <div class="bar"><i id="levelBar" style="background:linear-gradient(90deg,#7cf5c8,#21c98a)"></i></div>
+      </div>
+      <div class="card">
+        <h3>Score</h3>
+        <div class="row"><div class="grow">Today's score</div><div class="val" id="score"></div></div>
+        <div class="row"><div class="grow">Early bird (before 9am ×1.5)</div><div class="val" id="early"></div></div>
+        <div class="row"><div class="grow">Clean morning</div><div class="val" id="clean"></div></div>
+        <div class="row" id="lateRow"><div class="grow">Late to clock in</div><div class="val late" id="late"></div></div>
+        <div class="row" id="othersRow"><div class="grow">From your other computers</div><div class="val" id="others"></div></div>
+      </div>
+      <div class="card">
+        <h3>This week</h3>
+        <div class="week" id="week"></div>
+        <div class="row" style="margin-top:8px"><div class="grow dim" id="streak"></div><div class="val" id="tier"></div></div>
+      </div>
+      <div class="card apps">
+        <h3>Apps that count</h3>
+        <div id="picked"></div>
+        <div id="byAppWrap"><h3 style="margin-top:12px">Today by app</h3><div id="byApp"></div></div>
+      </div>
+    </section>
+
+    <section id="tab-race" class="hidden">
+      <div id="notJoined" class="card hidden">
+        <h3>Friend board</h3>
+        <p class="dim" style="margin:0 0 10px">Race up to 4 friends on focus score. Whoever wins the day gets 3 taunts.</p>
+        <button class="primary" onclick="invoke('open_setup')">Join or create a board</button>
+      </div>
+      <div id="raceCard" class="card">
+        <h3 id="raceTitle">Today's race</h3>
+        <div id="friends"></div>
+        <div class="faint" id="synced" style="font-size:11px;margin-top:6px"></div>
+      </div>
+      <div id="tauntCard" class="card hidden">
+        <h3>👑 You won yesterday · <span id="tauntsLeft"></span> taunts left</h3>
+        <select id="tauntWho"></select>
+        <input id="tauntMsg" maxlength="80" placeholder="Say something…" style="margin-top:8px">
+        <div id="ideas" style="margin-top:4px"></div>
+        <div class="line"><button class="primary" style="flex:1" onclick="sendTaunt()">Send taunt</button></div>
+        <div class="err" id="tauntErr"></div>
+      </div>
+      <div id="inviteCard" class="card hidden">
+        <h3>Invite a friend</h3>
+        <div class="row"><div class="grow boardcode" id="boardCode"></div><button onclick="copy(state.board.code)">Copy code</button></div>
+        <div class="dim" style="font-size:12px;margin:8px 0 4px">Windows: paste into PowerShell</div>
+        <div class="code" id="winCmd"></div>
+        <div class="dim" style="font-size:12px;margin:8px 0 4px">Mac: paste into Terminal</div>
+        <div class="code" id="macCmd"></div>
+        <div class="line"><button onclick="copy(state.board.installCommand)">Copy Windows</button><button onclick="copy(state.board.macInstall)">Copy Mac</button></div>
+      </div>
+    </section>
+
+    <section id="tab-settings" class="hidden">
+      <div class="card">
+        <h3>Daily goal</h3>
+        <div class="row"><div class="grow">Grow with me (recent average + 15m)</div><div class="toggle" id="autoGoal"></div></div>
+        <div class="row" id="hoursRow"><div class="grow">Hours a day</div><input id="goalHours" type="number" min="0.5" max="12" step="0.5" style="width:80px"></div>
+        <div class="row" id="idleRow"><div class="grow">Pause when idle 2 minutes</div><div class="toggle" id="idlePause"></div></div>
+        <div class="faint" id="idleNote" style="font-size:11px"></div>
+      </div>
+      <div class="card">
+        <h3>Office hours</h3>
+        <div class="row"><div class="grow">I start work at</div><select id="start" style="width:110px"></select></div>
+        <div class="days" id="days" style="margin:8px 0"></div>
+        <div class="faint" id="officeNote" style="font-size:11px"></div>
+        <div class="row" style="margin-top:6px"><div class="grow">Close YouTube, Instagram & co until I clock in</div><div class="toggle" id="lock"></div></div>
+        <div class="err" id="officeErr"></div>
+      </div>
+      <div class="card">
+        <h3>This computer</h3>
+        <div class="row"><div class="grow">Open at sign-in</div><div class="toggle" id="autostart"></div></div>
+        <div class="row"><div class="grow">Start or stop from anywhere</div><div class="val">Ctrl+Alt+F</div></div>
+      </div>
+      <div class="card" id="accountCard">
+        <h3>Account</h3>
+        <div id="accountOn">
+          <div class="row"><div class="grow"><b id="accName"></b><div class="faint" style="font-size:11px">Board <span id="accCode"></span></div></div></div>
+          <div class="row"><input id="email" placeholder="you@email.com"><button onclick="saveEmail()">Save</button></div>
+          <div class="faint" style="font-size:11px">Alerts go here: friends passing you, being late, taunts. Sign in with the same email on your other computers and your time adds up.</div>
+          <div class="err" id="emailErr"></div>
+          <div class="line"><button onclick="signOut()">Sign out of this PC</button><button class="danger" onclick="leave()">Delete account</button></div>
+        </div>
+        <div id="accountOff"><p class="dim" style="margin:0 0 8px">Not signed in.</p><button class="primary" onclick="invoke('open_setup')">Sign in or join</button></div>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <span>Work Clock <span id="ver"></span></span>
+    <button id="update" class="primary hidden" onclick="invoke('run_update')"></button>
+    <span style="flex:1"></span>
+    <button class="ghost" onclick="invoke('quit')">Quit</button>
+  </footer>
+</div>
+<script src="common.js"></script>
+<script>
+let state = null, tab = "today", editing = false, days = null, hydrated = false;
+
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+  for (const t of ["today", "race", "settings"]) $("#tab-" + t).classList.toggle("hidden", t !== tab);
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") invoke("hide_panel"); });
+document.addEventListener("focusin", e => { if (e.target.matches("input,select")) editing = true; });
+document.addEventListener("focusout", () => editing = false);
+
+const copy = t => t && navigator.clipboard.writeText(t);
+
+onState(s => {
+  state = s;
+  $("#ring").innerHTML = ring(s, 58);
+  $("#today").textContent = s.today;
+  $("#meta").textContent = `${s.rank} · ${s.tier}` + (s.nextTier ? ` · ${s.nextTier.needed} to ${s.nextTier.name}` : "");
+  const label = { idle: s.shown.length ? "Start focusing" : "Pick apps", picking: "Start", running: "Stop" }[s.mode];
+  $("#startBtn").textContent = label;
+  $("#hint").textContent = s.mode === "picking" ? "Click the apps or browser tabs you'll work in, then Start."
+    : s.mode === "running" ? s.subtitle : (s.office.line || s.board.race || "Click the clock, click your apps, click the clock again.");
+  $("#goalText").textContent = `${s.today} of ${s.goal}`;
+  $("#goalPct").textContent = s.goalMet ? "Done 🎉" : Math.round(s.progress * 100) + "%";
+  $("#goalBar").style.width = Math.min(100, s.progress * 100) + "%";
+  $("#level").textContent = `Level ${s.level}`;
+  $("#xp").textContent = `${s.xpToNext} XP to ${s.level + 1}`;
+  $("#levelBar").style.width = s.levelProgress * 100 + "%";
+  $("#score").textContent = s.score;
+  $("#early").textContent = "+" + s.earlyBonus;
+  $("#clean").textContent = s.clean;
+  $("#lateRow").classList.toggle("hidden", !s.office.late);
+  $("#late").textContent = `−${s.office.late}m`;
+  $("#othersRow").classList.toggle("hidden", !s.hasOthers);
+  $("#others").textContent = s.othersToday;
+  const max = Math.max(3600, ...s.week.map(w => w.total));
+  $("#week").innerHTML = s.week.map(w => `<div class="${w.today ? "today" : ""}" title="${Math.round(w.total / 60)}m"><span style="height:${Math.max(3, w.total / max * 54)}px"></span><b>${w.label}</b></div>`).join("");
+  $("#streak").textContent = s.streak ? `🔥 ${s.streak}-day streak` : "No streak yet. Hit today's goal.";
+  $("#tier").textContent = s.tier;
+  $("#picked").innerHTML = s.shown.length
+    ? s.shown.map(a => `<div class="row">${avatar(a.name)}<div class="grow">${esc(a.name)}</div><button class="x" data-k="${esc(a.key)}">✕</button></div>`).join("")
+    : `<div class="dim">None yet. Click Start, then click the apps you work in.</div>`;
+  document.querySelectorAll("#picked .x").forEach(b => b.onclick = () => invoke("remove_picked", { key: b.dataset.k }));
+  $("#byAppWrap").classList.toggle("hidden", !s.byApp.length);
+  $("#byApp").innerHTML = s.byApp.map(a => `<div class="row">${avatar(a.name, 18)}<div class="grow">${esc(a.name)}</div><div class="val">${a.time}</div></div>`).join("");
+
+  // Race
+  const b = s.board;
+  $("#notJoined").classList.toggle("hidden", b.joined);
+  $("#raceCard").classList.toggle("hidden", !b.joined);
+  $("#inviteCard").classList.toggle("hidden", !b.joined);
+  $("#raceTitle").textContent = b.race ? `Today's race · ${b.race}` : "Today's race";
+  $("#friends").innerHTML = b.friends.map((f, i) => `
+    <div class="friend ${f.me ? "me" : ""}">
+      <div class="pos">${f.champion ? "👑" : i + 1}</div>
+      <div class="who"><b>${esc(f.name)}${f.me ? " (you)" : ""}</b>${f.focusing ? '<span class="dot" title="Focusing now"></span>' : ""}
+        <small>${f.today} focused · Lv ${f.level}${f.streak ? ` · 🔥${f.streak}` : ""}${f.late ? ` · <span class="late">${f.late}m late</span>` : f.in ? ` · in ${f.in}` : f.due ? ` · due ${f.due}` : ""}</small></div>
+      <div class="score">${f.scoreText}</div>
+    </div>`).join("") || `<div class="dim">Just you so far. Invite a friend below.</div>`;
+  $("#synced").textContent = b.error ? b.error : b.synced ? `Updated ${b.synced}` : "Connecting…";
+  $("#tauntCard").classList.toggle("hidden", !(b.joined && b.tauntsLeft > 0));
+  $("#tauntsLeft").textContent = b.tauntsLeft;
+  if (!editing) {
+    const others = b.friends.filter(f => !f.me);
+    const cur = $("#tauntWho").value;
+    $("#tauntWho").innerHTML = others.map(f => `<option value="${f.id}" ${f.id === cur ? "selected" : ""}>${esc(f.name)}</option>`).join("");
+  }
+  if (!$("#ideas").innerHTML) $("#ideas").innerHTML = b.ideas.map(i => `<span class="chip">${esc(i)}</span>`).join("");
+  document.querySelectorAll("#ideas .chip").forEach(c => c.onclick = () => $("#tauntMsg").value = c.textContent);
+  $("#boardCode").textContent = b.code || "";
+  $("#winCmd").textContent = b.installCommand || "";
+  $("#macCmd").textContent = b.macInstall || "";
+
+  // Settings
+  $("#autoGoal").classList.toggle("on", s.autoGoal);
+  $("#hoursRow").classList.toggle("hidden", s.autoGoal);
+  $("#idlePause").classList.toggle("on", s.idlePause || b.joined);
+  $("#idleNote").textContent = b.joined ? "Always on while you're on a board, plus: no key, click or scroll for 10 minutes and that time is handed back." : "";
+  $("#lock").classList.toggle("on", s.office.lock);
+  const o = s.office;
+  $("#officeNote").textContent = o.pending ? `Changes start ${o.pending}: ${timeText(o.plannedStart)}.` : "Changes start tomorrow, so today can't be pushed back once you're late. Late costs a point a minute after 5 minutes.";
+  $("#accountOn").classList.toggle("hidden", !b.joined);
+  $("#accountOff").classList.toggle("hidden", b.joined);
+  $("#accName").textContent = b.name || "";
+  $("#accCode").textContent = b.code || "";
+  $("#ver").textContent = s.version;
+  $("#update").classList.toggle("hidden", !s.update);
+  $("#update").textContent = `Update to ${s.update}`;
+  if (!hydrated || !editing) {
+    if (!hydrated) {
+      $("#goalHours").value = s.goalHours;
+      $("#start").innerHTML = timeOptions(o.plannedStart);
+      days = o.plannedDays;
+      dayButtons($("#days"), days, v => { days = v; saveSchedule(); });
+      invoke("get_autostart").then(on => $("#autostart").classList.toggle("on", on));
+    }
+    if (document.activeElement !== $("#email")) $("#email").value = b.email || "";
+    hydrated = true;
+  }
+});
+
+$("#autoGoal").onclick = () => invoke("set_goal", { auto: !state.autoGoal, hours: +$("#goalHours").value || 4 });
+$("#goalHours").onchange = () => invoke("set_goal", { auto: false, hours: +$("#goalHours").value || 4 });
+$("#idlePause").onclick = () => { if (!state.board.joined) invoke("set_idle_pause", { on: !state.idlePause }); };
+$("#lock").onclick = () => invoke("set_lock", { on: !state.office.lock });
+$("#autostart").onclick = () => { const on = !$("#autostart").classList.contains("on"); $("#autostart").classList.toggle("on", on); invoke("set_autostart", { on }); };
+$("#start").onchange = saveSchedule;
+function saveSchedule() {
+  $("#officeErr").textContent = "";
+  invoke("set_schedule", { start: +$("#start").value, days }).catch(e => $("#officeErr").textContent = e);
+}
+function saveEmail() {
+  $("#emailErr").textContent = "";
+  invoke("set_email", { email: $("#email").value }).catch(e => $("#emailErr").textContent = e);
+}
+function sendTaunt() {
+  const id = $("#tauntWho").value, f = state.board.friends.find(x => x.id === id);
+  $("#tauntErr").textContent = "";
+  invoke("taunt", { id, name: f ? f.name : "", message: $("#tauntMsg").value })
+    .then(() => $("#tauntMsg").value = "").catch(e => $("#tauntErr").textContent = e);
+}
+function signOut() { if (confirm("Stop counting this PC toward your account? Your other computers carry on.")) invoke("sign_out"); }
+function leave() { if (confirm("Delete your account everywhere? Your friends will see you leave. This can't be undone.")) invoke("leave"); }
+</script>
+</body>
+</html>

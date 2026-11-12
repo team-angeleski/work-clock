@@ -1,0 +1,61 @@
+:root {
+  --bg: rgba(22, 23, 30, 0.86);
+  --card: rgba(255, 255, 255, 0.055);
+  --card-hi: rgba(255, 255, 255, 0.09);
+  --line: rgba(255, 255, 255, 0.09);
+  --text: #f4f4f7;
+  --dim: rgba(244, 244, 247, 0.62);
+  --faint: rgba(244, 244, 247, 0.38);
+  --flow1: #ffb347;
+  --flow2: #ff5e8a;
+  --goal: #3ee0a8;
+  --gold: #ffd25e;
+  --bad: #ff6b6b;
+  --accent: #ff8a5c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color: var(--text);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+  background: transparent;
+}
+button {
+  font: inherit; color: inherit; border: 0; cursor: pointer;
+  background: var(--card-hi); border-radius: 8px; padding: 7px 12px;
+  transition: background .15s, transform .1s;
+}
+button:hover { background: rgba(255, 255, 255, 0.14); }
+button:active { transform: scale(0.97); }
+button.primary { background: linear-gradient(135deg, var(--flow1), var(--flow2)); color: #1a1220; font-weight: 600; }
+button.primary:hover { filter: brightness(1.08); }
+button.ghost { background: transparent; color: var(--dim); }
+button.danger { color: var(--bad); }
+button:disabled { opacity: .45; cursor: default; }
+input, select {
+  font: inherit; color: var(--text); background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; outline: none; width: 100%;
+  user-select: text;
+}
+input:focus, select:focus { border-color: rgba(255, 138, 92, 0.7); }
+.num { font-variant-numeric: tabular-nums; }
+.dim { color: var(--dim); }
+.faint { color: var(--faint); }
+.err { color: var(--bad); font-size: 12px; min-height: 16px; }
+.avatar {
+  display: inline-grid; place-items: center; border-radius: 7px; font-weight: 700; color: #1a1220;
+  flex: none; text-transform: uppercase;
+}
+.days { display: flex; gap: 6px; }
+.days button { width: 34px; height: 34px; padding: 0; border-radius: 50%; font-weight: 600; color: var(--dim); }
+.days button.on { background: linear-gradient(135deg, var(--flow1), var(--flow2)); color: #1a1220; }
+.toggle { position: relative; width: 36px; height: 20px; border-radius: 10px; background: rgba(255,255,255,.18); flex: none; transition: background .15s; }
+.toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.toggle.on { background: var(--goal); }
+.toggle.on::after { transform: translateX(16px); }
+.hidden { display: none !important; }

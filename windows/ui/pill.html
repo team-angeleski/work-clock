@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Work Clock</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { overflow: hidden; }
+  #pill {
+    position: absolute; inset: 3px; border-radius: 15px;
+    background: rgba(20, 21, 28, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+    display: flex; align-items: center; gap: 8px; padding: 0 12px 0 8px;
+    transition: background .2s, transform .12s;
+  }
+  #pill:hover { background: rgba(32, 33, 42, 0.9); }
+  #pill.down { transform: scale(0.97); }
+  #pill.running.on { border-color: rgba(255, 150, 90, 0.45); }
+  #pill.running.off { border-color: rgba(255, 107, 107, 0.5); }
+  #lead { width: 30px; height: 30px; display: grid; place-items: center; flex: none; }
+  #icons { display: flex; }
+  #icons .avatar { margin-left: -6px; border: 1.5px solid rgba(20,21,28,.9); }
+  #icons .avatar:first-child { margin-left: 0; }
+  #mid { flex: 1; min-width: 0; text-align: center; line-height: 1.12; }
+  #title { font-size: 15px; font-weight: 600; letter-spacing: .2px; display: flex; gap: 4px; justify-content: center; align-items: baseline; }
+  #title .x { font-size: 10px; font-weight: 800; color: var(--flow1); }
+  #title .crown { font-size: 10px; }
+  #sub { font-size: 10.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .idle #title { color: var(--dim); }
+  @keyframes shake { 0%,100% { transform: translateX(0) } 15% { transform: translateX(-6px) } 30% { transform: translateX(5px) } 45% { transform: translateX(-4px) } 60% { transform: translateX(3px) } 75% { transform: translateX(-2px) } }
+  @keyframes bump { 0% { transform: scale(1) } 30% { transform: scale(1.06) } 100% { transform: scale(1) } }
+  .shake { animation: shake .55s ease-out; }
+  .bump { animation: bump .6s cubic-bezier(.3,1.6,.5,1); }
+</style>
+</head>
+<body>
+<div id="pill" class="idle" title="Click: start / stop · Right-click: panel · Drag: move">
+  <div id="lead"></div>
+  <div id="mid"><div id="title" class="num">0:00</div><div id="sub">Tap to focus</div></div>
+</div>
+<audio id="poop" src="poop.wav" preload="auto"></audio>
+<script src="common.js"></script>
+<script>
+const pill = $("#pill");
+let last = { shake: null, bump: null };
+
+onState(s => {
+  pill.className = `${s.mode} ${s.onTask ? "on" : s.offTask ? "off" : ""}`;
+  if (s.mode === "picking") {
+    const apps = s.shown.slice(0, 3);
+    $("#lead").innerHTML = apps.length
+      ? `<div id="icons">${apps.map(a => avatar(a.name, 20)).join("")}</div>`
+      : `<div style="font-size:18px">👆</div>`;
+  } else {
+    $("#lead").innerHTML = ring(s, 30);
+  }
+  const extra = (s.board.joined && s.leading ? `<span class="crown">👑</span>` : "") +
+    (s.multiplier > 1 ? `<span class="x">×${s.multiplier}</span>` : "");
+  $("#title").innerHTML = esc(s.title) + extra;
+  $("#sub").textContent = s.subtitle;
+  if (last.shake !== null && s.shake !== last.shake) replay("shake");
+  if (last.bump !== null && s.bump !== last.bump) replay("bump");
+  last = { shake: s.shake, bump: s.bump };
+});
+
+function replay(cls) {
+  pill.classList.remove("shake", "bump");
+  void pill.offsetWidth;
+  pill.classList.add(cls);
+  setTimeout(() => pill.classList.remove(cls), 700);
+}
+
+// Click to start/stop, drag to move, right-click for the panel.
+let downAt = null;
+pill.addEventListener("mousedown", e => {
+  if (e.button !== 0) return;
+  downAt = { x: e.screenX, y: e.screenY };
+  pill.classList.add("down");
+});
+window.addEventListener("mousemove", e => {
+  if (!downAt) return;
+  if (Math.abs(e.screenX - downAt.x) + Math.abs(e.screenY - downAt.y) > 4) {
+    downAt = null;
+    pill.classList.remove("down");
+    T.window.getCurrentWindow().startDragging();
+  }
+});
+window.addEventListener("mouseup", e => {
+  pill.classList.remove("down");
+  if (downAt && e.button === 0) invoke("primary");
+  downAt = null;
+});
+window.addEventListener("contextmenu", e => { e.preventDefault(); invoke("open_panel"); });
+
+// Sounds, made on the spot.
+const ctx = new AudioContext();
+const SOUNDS = {
+  pop: [[880, .06]], tink: [[1568, .05]], bottle: [[523, .08], [392, .12]],
+  glass: [[1047, .09], [1319, .09], [1568, .18]], hero: [[784, .1], [988, .1], [1175, .1], [1568, .3]],
+  basso: [[147, .25]], funk: [[330, .08], [262, .16]], purr: [[440, .05], [554, .05], [659, .1]],
+};
+function play(name) {
+  if (name === "poop") { const a = $("#poop"); a.currentTime = 0; a.play().catch(() => {}); return; }
+  const notes = SOUNDS[name]; if (!notes) return;
+  if (ctx.state === "suspended") ctx.resume();
+  let t = ctx.currentTime;
+  for (const [f, d] of notes) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = name === "basso" ? "triangle" : "sine";
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.12);
+    o.connect(g).connect(ctx.destination);
+    o.start(t); o.stop(t + d + 0.15);
+    t += d * 0.9;
+  }
+}
+listen("sound", play);
+</script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Taunt</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { overflow: hidden; padding: 8px; }
+  #b {
+    height: 100%; border-radius: 16px; padding: 14px 16px; cursor: pointer;
+    background: linear-gradient(135deg, rgba(60, 34, 52, .95), rgba(28, 22, 34, .95));
+    border: 1px solid rgba(255, 94, 138, .5); display: flex; gap: 12px; align-items: center;
+    animation: pop .45s cubic-bezier(.3, 1.6, .5, 1);
+  }
+  @keyframes pop { from { transform: scale(.6) translateY(20px); opacity: 0 } to { transform: none; opacity: 1 } }
+  .emoji { font-size: 34px; }
+  .from { font-size: 12px; color: var(--flow2); font-weight: 700; text-transform: uppercase; letter-spacing: .6px; }
+  .msg { font-size: 16px; font-weight: 600; margin-top: 3px; line-height: 1.25; }
+</style>
+</head>
+<body>
+<div id="b" onclick="invoke('dismiss_taunt')"><div class="emoji">💩</div><div><div class="from" id="from"></div><div class="msg" id="msg"></div></div></div>
+<script src="common.js"></script>
+<script>
+onState(s => {
+  const t = s.board.showing;
+  if (!t) return;
+  $("#from").textContent = `${t.from_name} says`;
+  $("#msg").textContent = t.message;
+});
+</script>
+</body>
+</html>
