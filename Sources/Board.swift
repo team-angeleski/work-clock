@@ -12,9 +12,9 @@ struct Friend: Decodable, Identifiable, Equatable {
     let name: String
     let level: Int
     let streak: Int
-    let focusing: Bool
-    let today: Int       // focused seconds today
-    let score: Int       // today's score in seconds, bonuses included
+    var focusing: Bool
+    var today: Int       // focused seconds today
+    var score: Int       // today's score in seconds, bonuses included
     let yesterday: Int   // yesterday's score
     let week: Int        // last 7 days' score
     let taunted_today: Int
@@ -51,6 +51,8 @@ private struct Inbox: Decodable {
     let taunts: [Taunt]
     let events: [Event]
     struct Event: Decodable { let kind: String; let from_name: String; let today: Int }
+    let live: [Live]?
+    struct Live: Decodable { let id: UUID; let today: Int; let score: Int; let focusing: Bool }
 }
 
 private struct Mine: Decodable {
@@ -94,7 +96,20 @@ final class Board {
     var joined: Bool { memberID != nil }
     var inviteCode: String? { defaults.string(forKey: "inviteCode") }
     var me: Friend? { friends.first { $0.id == memberID } }
-    var others: [Friend] { friends.filter { $0.id != memberID } }
+    var others: [Friend] { friends.filter { $0.id != memberID }.map(live) }
+
+    /// When the friends' numbers were last fetched; a friend who's focusing ticks up from there.
+    @ObservationIgnored private var liveAt = Date()
+
+    /// A focusing friend's clock runs on between fetches (for up to 3 minutes), so the race is live.
+    private func live(_ f: Friend) -> Friend {
+        guard f.focusing else { return f }
+        let add = Int(min(max(Date().timeIntervalSince(liveAt), 0), 180))
+        var g = f
+        g.today += add
+        g.score += add
+        return g
+    }
 
     /// Minutes late today, as the server counts them (live locally until clocked in).
     var myLate: Int {
@@ -114,7 +129,7 @@ final class Board {
     var ranked: [Friend] {
         guard let store else { return friends }
         return friends.map { f in
-            guard f.id == memberID else { return f }
+            guard f.id == memberID else { return live(f) }
             let score = myScore
             return Friend(id: f.id, name: f.name, level: store.level, streak: store.streak,
                           focusing: store.mode == .running && store.onTask,
@@ -343,7 +358,7 @@ final class Board {
 
     private func syncIfDue() {
         guard joined else { return }
-        let every: TimeInterval = defaults.bool(forKey: "debugCoachFast") ? 15 : store?.mode == .running ? 120 : 300
+        let every: TimeInterval = defaults.bool(forKey: "debugCoachFast") ? 15 : store?.mode == .running ? 30 : 300
         let since = Date().timeIntervalSince(lastSyncAttempt)
         // Check in just before 9am and 1pm: the server only credits bonus time it saw before the cut-off.
         let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
@@ -361,6 +376,16 @@ final class Board {
             guard let data = try? await call("focus_inbox", ["p_member": memberID?.uuidString, "p_secret": secret?.uuidString]),
                   let inbox = try? JSONDecoder().decode(Inbox.self, from: data) else { return }
             schedule(inbox.taunts)
+            if let live = inbox.live {
+                let byID = Dictionary(live.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                friends = friends.map { f in
+                    guard f.id != memberID, let l = byID[f.id] else { return f }
+                    var g = f
+                    g.today = l.today; g.score = l.score; g.focusing = l.focusing
+                    return g
+                }
+                liveAt = Date()
+            }
             for e in inbox.events where e.kind == "started" { friendStarted(e.from_name, today: e.today) }
         }
     }
@@ -395,6 +420,7 @@ final class Board {
                 "p_device": Self.deviceID, "p_blown": store.blownToday])
             let s = try JSONDecoder().decode(BoardState.self, from: data)
             friends = s.members
+            liveAt = Date()
             code = s.code
             tauntsLeft = s.taunts_left
             canPickCostume = Costume.enabled && (s.can_pick_character ?? false)

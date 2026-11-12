@@ -694,16 +694,19 @@ struct FriendsMini: View {
     let board: Board
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Today's race").font(.headline)
-                Spacer()
-                if let line = board.raceLine {
-                    Text(line).font(.caption.weight(.semibold)).foregroundStyle(board.leading ? .green : .orange)
+        // Ticks every second while visible, so a friend who's focusing counts up live.
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Today's race").font(.headline)
+                    Spacer()
+                    if let line = board.raceLine {
+                        Text(line).font(.caption.weight(.semibold)).foregroundStyle(board.leading ? .green : .orange)
+                    }
                 }
-            }
-            ForEach(Array(board.ranked.enumerated()), id: \.element.id) { i, f in
-                FriendRow(board: board, rank: i + 1, friend: f, compact: true)
+                ForEach(Array(board.ranked.enumerated()), id: \.element.id) { i, f in
+                    FriendRow(board: board, rank: i + 1, friend: f, compact: true)
+                }
             }
         }
     }
@@ -770,29 +773,32 @@ struct FriendsSection: View {
     @State private var target: UUID?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Friends").font(.system(.headline, design: .rounded))
-                Spacer()
-                if let c = board.code {
-                    Text(c).font(.caption.monospaced()).foregroundStyle(.secondary)
-                    Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(board.installCommand ?? c, forType: .string)
-                        store.announce("Invite copied. Send it to a friend", sound: nil, seconds: 3)
-                    } label: {
-                        Label("Copy invite", systemImage: "person.badge.plus")
+        // Ticks every second while visible, so a friend who's focusing counts up live.
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Friends").font(.system(.headline, design: .rounded))
+                    Spacer()
+                    if let c = board.code {
+                        Text(c).font(.caption.monospaced()).foregroundStyle(.secondary)
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(board.installCommand ?? c, forType: .string)
+                            store.announce("Invite copied. Send it to a friend", sound: nil, seconds: 3)
+                        } label: {
+                            Label("Copy invite", systemImage: "person.badge.plus")
+                        }
+                        .controlSize(.small)
+                        .help("Copies a one-line install command with your board code")
                     }
-                    .controlSize(.small)
-                    .help("Copies a one-line install command with your board code")
                 }
-            }
-            if !board.joined {
-                Button("Set up friends and office hours…") { AppWindows.shared?.showSetup() }
-                    .controlSize(.small)
-            } else { boardView }
-            if let e = board.error {
-                Text(e).font(.caption).foregroundStyle(.red)
+                if !board.joined {
+                    Button("Set up friends and office hours…") { AppWindows.shared?.showSetup() }
+                        .controlSize(.small)
+                } else { boardView }
+                if let e = board.error {
+                    Text(e).font(.caption).foregroundStyle(.red)
+                }
             }
         }
     }
