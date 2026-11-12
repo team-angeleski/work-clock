@@ -114,14 +114,12 @@ impl Board {
         !o.is_empty() && o.iter().all(|f| mine > f.score)
     }
 
-    /// Each unseen taunt pops up at a random moment in the next 2–45 minutes.
+    /// Each unseen taunt pops up right away, as long as I'm at the computer.
     pub fn schedule(&mut self, incoming: Vec<Taunt>) {
-        let fast = std::env::var("WORKCLOCK_FAST_TAUNTS").is_ok();
         for t in incoming {
             if self.scheduled.contains(&t.id) { continue; }
             self.scheduled.insert(t.id.clone());
-            let delay = if fast { 3.0 } else { 120.0 + fastrand::f64() * (2700.0 - 120.0) };
-            self.pending.push((clock::now() + delay, t));
+            self.pending.push((clock::now(), t));
         }
     }
 

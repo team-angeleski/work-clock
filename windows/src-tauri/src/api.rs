@@ -178,6 +178,23 @@ pub fn set_character(member: &str, secret: &str, character: &str, day: &str, nam
     call("focus_set_character", json!({"p_member": member, "p_secret": secret, "p_character": character, "p_day": day, "p_name": name})).map(|_| ())
 }
 
+#[derive(Deserialize, Debug)]
+pub struct InboxEvent { pub kind: String, pub from_name: String, pub today: i64 }
+
+/// What's new since the last look: unseen taunts, and friends who just started working.
+#[derive(Deserialize, Debug)]
+pub struct Inbox {
+    #[serde(default)]
+    pub taunts: Vec<Taunt>,
+    #[serde(default)]
+    pub events: Vec<InboxEvent>,
+}
+
+/// A tiny check every 20 seconds, separate from the full sync. Events are handed over once.
+pub fn inbox(member: &str, secret: &str) -> Result<Inbox, ApiError> {
+    decode(call("focus_inbox", json!({"p_member": member, "p_secret": secret}))?)
+}
+
 pub fn set_email(member: &str, secret: &str, email: &str) -> Result<(), ApiError> {
     call("focus_set_email", json!({"p_member": member, "p_secret": secret, "p_email": email})).map(|_| ())
 }

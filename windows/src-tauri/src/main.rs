@@ -344,6 +344,8 @@ fn toggle_panel(app: &AppHandle, force_show: bool) {
     place_above_pill(app, &w, 10.0);
     let _ = w.show();
     let _ = w.set_focus();
+    // Fresh race numbers whenever the panel opens.
+    app.state::<App>().nudge();
 }
 
 fn show_setup(app: &AppHandle) {
@@ -424,6 +426,7 @@ fn tick_loop(app: AppHandle, core: Arc<Mutex<Core>>, nudge: mpsc::Sender<()>) {
 /// Checks in with the board every 20 seconds if a sync is due, or at once when nudged.
 fn sync_loop(core: Arc<Mutex<Core>>, rx: mpsc::Receiver<()>) {
     let mut nudged = true;
+    let mut last_inbox = Instant::now() - Duration::from_secs(60);
     loop {
         while rx.try_recv().is_ok() { nudged = true; }
         let args = {
@@ -433,6 +436,14 @@ fn sync_loop(core: Arc<Mutex<Core>>, rx: mpsc::Receiver<()>) {
         if let Some(a) = args {
             let r = api::sync(&a);
             core.lock().unwrap().apply_sync(r);
+        }
+        // Taunts and "friend started" land within seconds: the inbox every 20 seconds.
+        if last_inbox.elapsed() >= Duration::from_secs(19) {
+            let creds = core.lock().unwrap().inbox_args();
+            if let Some((m, x)) = creds {
+                last_inbox = Instant::now();
+                if let Ok(inbox) = api::inbox(&m, &x) { core.lock().unwrap().apply_inbox(inbox); }
+            }
         }
         nudged = rx.recv_timeout(Duration::from_secs(20)).is_ok();
     }

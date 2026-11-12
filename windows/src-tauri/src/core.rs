@@ -20,8 +20,6 @@ pub struct Core {
     notified: bool,
     first_active: Option<f64>,
     first_active_day: String,
-    friend_was_focusing: HashMap<String, bool>,
-    friend_noticed: HashMap<String, f64>,
     last_lock_check: f64,
     pub shake_tick: u64,
     pub bump_tick: u64,
@@ -40,7 +38,7 @@ impl Core {
         let c = Core {
             engine, board: Board::default(), settings, settings_path,
             off_start: None, shook: 0, notified: false, first_active: None, first_active_day: String::new(),
-            friend_was_focusing: HashMap::new(), friend_noticed: HashMap::new(), last_lock_check: 0.0,
+            last_lock_check: 0.0,
             shake_tick: 0, bump_tick: 0, update: None, idle_now: 0.0,
         };
         c.save_settings();
@@ -219,11 +217,12 @@ impl Core {
     /// Returns a taunt to mark as seen on the server, when one pops up.
     pub fn step_taunts(&mut self, idle: f64) -> Option<String> {
         let t = now();
-        if self.board.showing.is_some() && t >= self.board.showing_until { self.board.showing = None; self.board.next_show_at = t + 20.0; }
+        if self.board.showing.is_some() && t >= self.board.showing_until { self.board.showing = None; self.board.next_show_at = t + 4.0; }
         if self.board.showing.is_some() || t < self.board.next_show_at { return None; }
         let i = self.board.pending.iter().position(|(at, _)| *at <= t)?;
-        // Only pop up when someone's actually there to see it.
-        if idle >= 60.0 { self.board.next_show_at = t + 120.0; return None; }
+        // Only pop up when someone's actually there to see it: check again every 10 seconds, so it
+        // pops the moment they're back.
+        if idle >= 60.0 { self.board.next_show_at = t + 10.0; return None; }
         let (_, next) = self.board.pending.remove(i);
         self.board.showing_until = t + 9.0;
         self.engine.events.push(Event::Sound("poop"));
@@ -236,7 +235,32 @@ impl Core {
     }
 
     pub fn dismiss_taunt(&mut self) {
-        if self.board.showing.take().is_some() { self.board.next_show_at = now() + 20.0; }
+        if self.board.showing.take().is_some() { self.board.next_show_at = now() + 4.0; }
+    }
+
+    /// The 20-second inbox: taunts queue at once; each friend who just started gets a notice.
+    pub fn apply_inbox(&mut self, inbox: api::Inbox) {
+        self.board.schedule(inbox.taunts);
+        for e in inbox.events.into_iter().filter(|e| e.kind == "started") { self.friend_started(&e.from_name, e.today); }
+    }
+
+    /// A friend just started working: tell me straight away, then sync for fresh race numbers.
+    fn friend_started(&mut self, name: &str, today: i64) {
+        let theirs = long(today as f64);
+        let mine = long(self.engine.today());
+        let short = crate::board::short(name);
+        if self.engine.mode == Mode::Running {
+            self.notify(&format!("{name} started too"), &format!("They're on {theirs} today. You're on {mine}. Keep going."));
+            self.engine.announce(&format!("{short} started too"), Some("pop"), 5.0);
+        } else {
+            self.notify(&format!("{name} just started working"), &format!("They're on {theirs} today. You're on {mine}. Your move."));
+            self.engine.announce(&format!("{short} started. Your move"), Some("funk"), 6.0);
+        }
+        self.engine.events.push(Event::Nudge);
+    }
+
+    pub fn inbox_args(&self) -> Option<(String, String)> {
+        Some((self.settings.member.clone()?, self.settings.secret.clone()?))
     }
 
     // MARK: The coach (Coach.swift): small, well-timed pushes back to work
@@ -354,23 +378,13 @@ impl Core {
         }
     }
 
-    /// After each board sync: friends starting to focus, friends blowing their clock-in.
+    /// After each board sync: friends blowing their clock-in. (Friends starting come through the inbox.)
     fn board_synced(&mut self) {
         let others: Vec<Friend> = self.board.others(&self.settings.member).into_iter().cloned().collect();
         for f in others.iter().filter(|f| f.due_min.is_some() && f.in_min.is_none() && f.late.unwrap_or(0) >= 15) {
             if !self.once(&format!("friendlate-{}", f.id)) { continue; }
             self.notify(&format!("{} hasn't clocked in", f.name),
                         &format!("{} minutes late and losing a point a minute. Get ahead.", f.late.unwrap_or(15)));
-        }
-        for f in &others {
-            let was = self.friend_was_focusing.insert(f.id.clone(), f.focusing);
-            if !f.focusing || was != Some(false) { continue; }
-            // Only when I'm not already working, and at most once an hour per friend.
-            if self.engine.mode == Mode::Running || now() - self.friend_noticed.get(&f.id).copied().unwrap_or(0.0) <= 3600.0 { continue; }
-            self.friend_noticed.insert(f.id.clone(), now());
-            let mine = long(self.engine.today_score());
-            self.notify(&format!("{} just started focusing", f.name),
-                        &format!("They're on {}. You're on {mine}. Your move.", long(f.score as f64)));
         }
     }
 
