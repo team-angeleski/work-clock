@@ -58,6 +58,11 @@ pub struct BoardState {
     /// I won yesterday, so I get to pick today's character.
     #[serde(default)]
     pub can_pick_character: Option<bool>,
+    /// Legends I've unlocked (one per day won, kept for good), and whether today's unlock is unused.
+    #[serde(default)]
+    pub unlocked: Option<Vec<String>>,
+    #[serde(default)]
+    pub can_unlock: Option<bool>,
 }
 
 #[derive(Deserialize, Debug)]

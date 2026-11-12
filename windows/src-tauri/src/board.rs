@@ -65,6 +65,8 @@ pub struct Board {
     pub last_lead: Option<bool>,
     /// I won yesterday, so I get to pick today's character.
     pub can_pick: bool,
+    pub unlocked: Vec<String>,
+    pub can_unlock: bool,
 }
 
 pub fn short(name: &str) -> String {
@@ -131,6 +133,8 @@ impl Board {
         self.email = None;
         self.last_synced = None;
         self.can_pick = false;
+        self.unlocked.clear();
+        self.can_unlock = false;
     }
 }
 

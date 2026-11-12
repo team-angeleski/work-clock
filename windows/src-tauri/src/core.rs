@@ -133,6 +133,8 @@ impl Core {
                 self.settings.code = Some(s.code);
                 self.board.taunts_left = s.taunts_left;
                 self.board.can_pick = s.can_pick_character.unwrap_or(false);
+                self.board.unlocked = s.unlocked.unwrap_or_default();
+                self.board.can_unlock = s.can_unlock.unwrap_or(false);
                 if let Some(m) = s.mine { self.engine.apply_remote(m.others_today as f64, &m.history); }
                 if let Some(m) = s.me {
                     self.board.email = m.email;
@@ -494,7 +496,7 @@ impl Core {
                 "joined": self.joined(), "code": self.settings.code, "name": self.settings.name, "email": self.board.email,
                 "friends": friends, "tauntsLeft": self.board.taunts_left, "race": race, "error": self.board.error,
                 "busy": self.board.busy, "synced": self.board.last_synced.map(clock::time_text), "invite": self.settings.invite_code,
-                "showing": self.board.showing, "canPick": self.board.can_pick, "characterName": my_character_name, "ideas": crate::board::IDEAS, "hasKey": api::has_key(),
+                "showing": self.board.showing, "canPick": self.board.can_pick, "unlocked": self.board.unlocked, "canUnlock": self.board.can_unlock, "characterName": my_character_name, "ideas": crate::board::IDEAS, "hasKey": api::has_key(),
                 "installCommand": self.settings.code.as_ref().map(|c| format!("& ([scriptblock]::Create((irm https://raw.githubusercontent.com/team-angeleski/work-clock/main/windows/install.ps1))) {c}")),
                 "macInstall": self.settings.code.as_ref().map(|c| format!("curl -fsSL https://raw.githubusercontent.com/team-angeleski/work-clock/main/install.sh | bash -s {c}")),
             },

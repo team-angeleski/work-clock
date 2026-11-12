@@ -50,10 +50,13 @@
   .boardcode { font-size: 22px; font-weight: 700; letter-spacing: 3px; }
   .picker { background: rgba(255, 210, 94, 0.09); }
   .picker h3 { color: var(--gold); text-transform: none; letter-spacing: 0; font-size: 13px; }
-  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .grid button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px 5px; background: rgba(255,255,255,.04); border-radius: 9px; }
-  .grid button.on { background: rgba(255, 210, 94, 0.25); }
-  .grid span { font-size: 9.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
+  .grid button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px 4px; background: rgba(255,255,255,.05); border-radius: 10px; border: 1.5px solid transparent; }
+  .grid button.on { background: rgba(255, 210, 94, 0.28); border-color: var(--gold); }
+  .grid button.locked .pt { filter: grayscale(1); opacity: .45; }
+  .grid button:disabled { opacity: 1; cursor: default; }
+  .grid .lock { position: absolute; top: 3px; right: 4px; font-size: 10px; }
+  .grid span { font-size: 9px; font-weight: 600; line-height: 1.15; text-align: center; height: 21px; overflow: hidden; }
   .quote { font-family: Georgia, serif; font-style: italic; text-align: center; margin: 10px 0 2px; font-size: 13.5px; }
   .badge { margin-left: 5px; }
   footer { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: 11px; }
@@ -119,7 +122,8 @@
         <button class="primary" onclick="invoke('open_setup')">Join or create a board</button>
       </div>
       <div id="pickCard" class="card picker hidden">
-        <h3 id="pickTitle">🎭 You won yesterday. Pick your character for today</h3>
+        <h3 id="pickTitle">🎭 You won yesterday. Pick who you are today</h3>
+        <div class="faint" id="pickCount" style="font-size:11px"></div>
         <div class="grid" id="pickGrid"></div>
         <div class="quote hidden" id="pickLine"></div>
         <div class="line"><input id="pickName" maxlength="24" placeholder="Nickname (optional)"><button id="pickSave" class="hidden" onclick="pick(state.character)">Save</button></div>
@@ -256,16 +260,25 @@ onState(s => {
   $("#pickCard").classList.toggle("hidden", !(b.joined && b.canPick));
   if (b.canPick) {
     const mine = s.character && CHARACTER[s.character];
-    $("#pickTitle").textContent = mine ? `🎭 Today you're ${b.characterName || mine.name}` : "🎭 You won yesterday. Pick your character for today";
-    if (pickedShown !== s.character || !$("#pickGrid").innerHTML) {
-      pickedShown = s.character;
-      $("#pickGrid").innerHTML = CHARACTERS.map(c => `<button class="${c.id === s.character ? "on" : ""}" data-id="${c.id}" title="${esc(c.name)}">${characterFace(c.id, 30)}<span>${esc(c.name)}</span></button>`).join("");
+    const owned = new Set(b.unlocked || []), n = CHARACTERS.filter(c => owned.has(c.id)).length;
+    $("#pickTitle").textContent = mine ? `🎭 Today you're ${b.characterName || mine.name}`
+      : b.canUnlock ? "🎭 You won yesterday. Unlock a legend" : "🎭 You won yesterday. Pick who you are today";
+    $("#pickCount").textContent = b.canUnlock ? `Every day you win unlocks one, yours to keep. ${n} of ${CHARACTERS.length} unlocked.`
+      : `${n} of ${CHARACTERS.length} unlocked. Win again to unlock another.`;
+    const key = [s.character, [...owned].sort().join(), b.canUnlock, b.busy].join("|");
+    if (pickedShown !== key) {
+      pickedShown = key;
+      $("#pickGrid").innerHTML = CHARACTERS.map(c => {
+        const have = owned.has(c.id), open = have || b.canUnlock;
+        const tip = have ? `Wear ${c.name} today` : open ? `Unlock ${c.name} (one unlock per win)` : "Locked. Win a day to unlock";
+        return `<button class="${c.id === s.character ? "on" : ""} ${have ? "" : "locked"}" data-id="${c.id}" title="${esc(tip)}" ${b.busy || !open ? "disabled" : ""}>
+          <div class="pt">${portrait(c.id, 30)}</div>${have ? "" : `<span class="lock">${b.canUnlock ? "🔓" : "🔒"}</span>`}<span>${esc(c.name)}</span></button>`;
+      }).join("");
       document.querySelectorAll("#pickGrid button").forEach(x => x.onclick = () => pick(x.dataset.id));
     }
     $("#pickLine").classList.toggle("hidden", !mine);
     $("#pickLine").textContent = mine ? `“${mine.line}”` : "";
     $("#pickSave").classList.toggle("hidden", !mine);
-    document.querySelectorAll("#pickGrid button").forEach(x => x.disabled = b.busy);
   }
   $("#synced").textContent = b.error ? b.error : b.synced ? `Updated ${b.synced}` : "Connecting…";
   $("#tauntCard").classList.toggle("hidden", !(b.joined && b.tauntsLeft > 0));

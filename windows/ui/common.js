@@ -20,21 +20,16 @@ function avatar(name, size = 22) {
     `background:linear-gradient(135deg,hsl(${h} 85% 70%),hsl(${(h + 40) % 360} 80% 60%))">${esc(n.replace(/^www\./, "")[0] || "?")}</span>`;
 }
 
-/** The ring with the buddy inside: progress to today's goal, and how you're doing (Views.swift Ring + Face).
- *  `s.character` dresses the buddy in today's costume; `s.bare` leaves out the ring. */
-function ring(s, size) {
-  const line = size * 0.12, r = (size - line) / 2, c = 2 * Math.PI * r;
-  const p = Math.max(0.002, Math.min(1, s.progress || 0));
+/** The buddy's face as SVG elements: `w` wide, centred at (cx, cy) (Views.swift Face).
+ *  Tinted by status, or in the character's skin with a lighter top. */
+function faceSvg(s, w, cx, cy) {
   const active = s.mode === "running" && s.onTask;
-  const stroke = active ? (s.goalMet ? "url(#gGoal)" : "url(#gFlow)") : s.offTask ? "rgba(255,107,107,.7)" : "rgba(160,160,170,.7)";
-  const cx = size / 2, cy = size / 2;
   const ch = s.character ? CHARACTER[s.character] : null;
-  const w = size * 0.7, x0 = cx - w / 2, y0 = cy - w / 2;
-  // Face colour: status tint, or the character's skin with a lighter top.
+  const x0 = cx - w / 2, y0 = cy - w / 2;
   const tint = s.offTask ? [255, 90, 90] : s.goalMet ? [52, 199, 89] : active ? [255, 149, 0] : [150, 150, 158];
-  const mix = (rgb, k) => `rgb(${rgb.map(v => Math.round(v + (255 - v) * k)).join(",")})`;
-  const top = ch && ch.skin ? "rgb(161,121,96)" : mix(tint, 0.55);
-  const bottom = ch && ch.skin ? ch.skin : mix(tint, 0.25);
+  const mix = (c, k) => `rgb(${c.map(v => Math.round(v + (255 - v) * k)).join(",")})`;
+  const top = ch ? mix(ch.skin, 0.18) : mix(tint, 0.55);
+  const bottom = ch ? mix(ch.skin, 0) : mix(tint, 0.25);
   const mood = Math.max(-1, Math.min(1, s.mood ?? 0)), ink = "#1f1f1f";
   const id = "f" + Math.random().toString(36).slice(2, 8);
   const eyeY = y0 + w * (0.5 - 0.06 + (mood < 0 ? 0.03 : 0));
@@ -54,20 +49,29 @@ function ring(s, size) {
   const blush = blushA > 0 ? [-1, 1].map(sd => `<ellipse cx="${cx + sd * w * 0.295}" cy="${y0 + w * 0.6}" rx="${w * 0.085}" ry="${w * 0.05}" fill="rgba(255,105,180,${blushA})"/>`).join("") : "";
   const my = y0 + w * 0.67, mw = w * 0.1, bend = mood * w * 0.1;
   const mouth = `<path d="M${cx - mw} ${my - bend / 2} Q${cx} ${my + bend} ${cx + mw} ${my - bend / 2}" fill="none" stroke="${ink}" stroke-width="${w * 0.065}" stroke-linecap="round"/>`;
-  const ringSvg = s.bare ? "" : `
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,.13)" stroke-width="${line}"/>
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${stroke}" stroke-width="${line}" stroke-linecap="round"
-        stroke-dasharray="${c * p} ${c}" transform="rotate(-90 ${cx} ${cy})" style="transition:stroke-dasharray .6s"/>`;
-  return `<div style="position:relative;width:${size}px;height:${size}px;flex:none">
-    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="overflow:visible">
+  return `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bottom}"/></linearGradient></defs>
+    <circle cx="${cx}" cy="${cy}" r="${w / 2}" fill="url(#${id})"/>${blush}${eyes}${mouth}`;
+}
+
+/** The ring with the buddy inside: progress to today's goal, and how you're doing (Views.swift Ring).
+ *  `s.character` puts today's legend's head in the ring. */
+function ring(s, size) {
+  const line = size * 0.12, r = (size - line) / 2, c = 2 * Math.PI * r;
+  const p = Math.max(0.002, Math.min(1, s.progress || 0));
+  const active = s.mode === "running" && s.onTask;
+  const stroke = active ? (s.goalMet ? "url(#gGoal)" : "url(#gFlow)") : s.offTask ? "rgba(255,107,107,.7)" : "rgba(160,160,170,.7)";
+  const cx = size / 2, cy = size / 2, w = size * 0.7;
+  const ch = s.character ? CHARACTER[s.character] : null;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="overflow:visible;flex:none">
       <defs>
         <linearGradient id="gFlow" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb347"/><stop offset="1" stop-color="#ff5e8a"/></linearGradient>
         <linearGradient id="gGoal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cf5c8"/><stop offset="1" stop-color="#21c98a"/></linearGradient>
-        <linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bottom}"/></linearGradient>
-      </defs>${ringSvg}
-      <circle cx="${cx}" cy="${cy}" r="${w / 2}" fill="url(#${id})"/>
-      ${blush}${eyes}${mouth}
-    </svg>${costumeLayer(ch, w, cx, cy)}</div>`;
+      </defs>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,.13)" stroke-width="${line}"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${stroke}" stroke-width="${line}" stroke-linecap="round"
+        stroke-dasharray="${c * p} ${c}" transform="rotate(-90 ${cx} ${cy})" style="transition:stroke-dasharray .6s"/>
+      ${earsSvg(ch, w, cx, cy)}${faceSvg(s, w, cx, cy)}${costumeSvg(ch, w, cx, cy)}
+    </svg>`;
 }
 
 const DAY_LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
