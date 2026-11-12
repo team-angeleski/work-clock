@@ -184,6 +184,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         coach = Coach(store: store, board: board)
         coach?.onShake = { [weak self] in self?.shake() }
         windows = AppWindows(store: store, board: board, updater: updater)
+        updater.canInstallNow = { [weak self] in self?.store.mode == .idle }
+        afterUpdate()
         board.onSynced = { [weak self] in
             guard let self else { return }
             self.coach?.boardSynced()
@@ -234,6 +236,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         signal(SIGTERM, SIG_IGN)
         sigterm.setEventHandler { [weak self] in self?.store.save(); exit(0) }
         sigterm.resume()
+    }
+
+    /// Just updated itself: say so, and if macOS dropped the Accessibility permission (it can, because
+    /// release builds are signed anonymously), ask for it back.
+    private func afterUpdate() {
+        let d = UserDefaults.standard
+        let trusted = AXIsProcessTrusted()
+        defer { d.set(trusted, forKey: "axTrusted") }
+        guard let from = d.string(forKey: "updatedFrom") else { return }
+        d.removeObject(forKey: "updatedFrom")
+        if d.bool(forKey: "axTrusted") && !trusted {
+            Notify.post("Darnell Jr. updated", "macOS needs you to switch Accessibility back on for it. Opening the setting now.")
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+        } else {
+            store.announce("Updated from \(from) to \(updater.current)", sound: "Glass", seconds: 5)
+        }
     }
 
     private let sigterm = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)

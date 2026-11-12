@@ -75,7 +75,7 @@ Click the clock, click the apps you'll work in, click the clock again. Tap twice
 
 ## Updates
 
-The panel shows an Update button when a new release is out. After updating, macOS may ask you to allow Accessibility again (System Settings → Privacy & Security → Accessibility).
+Darnell Jr. checks for a new release every hour and installs it by itself as soon as you're not in a focus session (it restarts in a couple of seconds; your time and board stay). The Update button in the panel installs it straight away. After an update, macOS may ask you to switch Accessibility back on; the app opens that setting for you.
 
 ## Build
 
