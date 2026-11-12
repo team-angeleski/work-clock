@@ -28,7 +28,7 @@ final class AppWindows: NSObject, NSWindowDelegate {
     func showSetup(emailOnly: Bool = false) {
         settings?.close()
         let view = SetupView(store: store, board: board, emailOnly: emailOnly) { [weak self] in self?.setup?.close() }
-        setup = setup ?? makeWindow(title: "Welcome to Work Clock", size: NSSize(width: 620, height: 690))
+        setup = setup ?? makeWindow(title: "Welcome to Darnell Jr.", size: NSSize(width: 620, height: 690))
         setup?.titleVisibility = .hidden
         setup?.isMovableByWindowBackground = true
         setup?.contentView = NSHostingView(rootView: view)
@@ -37,7 +37,7 @@ final class AppWindows: NSObject, NSWindowDelegate {
 
     func showSettings(tab: SettingsView.Tab = .general) {
         let view = SettingsView(store: store, board: board, updater: updater, tab: tab)
-        settings = settings ?? makeWindow(title: "Work Clock Settings", size: NSSize(width: 500, height: 440))
+        settings = settings ?? makeWindow(title: "Darnell Jr. Settings", size: NSSize(width: 500, height: 440))
         settings?.contentView = NSHostingView(rootView: view)
         present(settings)
     }
@@ -153,7 +153,7 @@ struct SetupView: View {
     private var welcome: some View {
         VStack(spacing: 0) {
             buddy(mood: 1)
-            title("Meet Work Clock", "A tiny focus clock next to your Dock that only counts real work.")
+            title("Meet Darnell Jr.", "Your little focus buddy. He sits next to your Dock and only counts real work.")
             VStack(alignment: .leading, spacing: 18) {
                 feature("cursorarrow.click.2", .blue, "Pick, then focus", "Click the clock, click the apps you work in, then click it again to start.")
                 feature("eye.fill", .orange, "Only real work counts", "Drift to YouTube and it stops, and gives you a nudge back.")
@@ -179,7 +179,7 @@ struct SetupView: View {
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
                 }
             }
-            Text("The first time you count a website, macOS asks if Work Clock can read your browser's tabs. Click OK.")
+            Text("The first time you count a website, macOS asks if Darnell Jr. can read your browser's tabs. Click OK.")
                 .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 20)
@@ -207,7 +207,7 @@ struct SetupView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             Text("Nothing else. Never shared.").font(.footnote).foregroundStyle(.tertiary).padding(.top, 18)
             if !emailOnly {
-                Button("Already use Work Clock on another computer? Sign in") {
+                Button("Already use Darnell Jr. on another computer? Sign in") {
                     signingIn = true
                     forward = true
                     withAnimation(.smooth(duration: 0.35)) { step = .signIn }
@@ -613,7 +613,7 @@ struct SettingsView: View {
                 row("building.2.fill", "Late to clock in: −1 a minute after 5 minutes' grace (max −120)")
             }
             Section("Winning") {
-                row("crown.fill", "Top score wins the day and gets 3 taunts the next day")
+                row("crown.fill", "Top score wins the day: 3 taunts and a character to dress up as the next day")
                 row("envelope.fill", "Friends get emailed when you pass them, and when you're 15 minutes late")
             }
             Section("Fair play") {
@@ -661,7 +661,7 @@ struct AccountSettings: View {
                             store.announce("Invite copied. Send it to a friend", sound: nil, seconds: 3)
                         }
                     }
-                    Text("They paste it into Terminal. It installs Work Clock and opens setup with your code filled in.")
+                    Text("They paste it into Terminal. It installs Darnell Jr. and opens setup with your code filled in.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("This Mac") {
@@ -684,7 +684,7 @@ struct AccountSettings: View {
             } else {
                 Section {
                     Text("You're not on a board yet.")
-                    Button("Set up Work Clock") { AppWindows.shared?.showSetup() }
+                    Button("Set up Darnell Jr.") { AppWindows.shared?.showSetup() }
                 }
             }
         }

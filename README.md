@@ -1,4 +1,6 @@
-# Work Clock
+# Darnell Jr.
+
+Your little focus buddy (formerly Work Clock).
 
 A focus clock that sits next to your Mac's Dock. Pick the apps (or browser sites) you work in, click to start, and it only counts time while you're actually in them.
 

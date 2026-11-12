@@ -1,10 +1,10 @@
 #!/bin/zsh
-# Builds WorkClock.app next to this script.
+# Builds "Darnell Jr..app" (executable and bundle id: WorkClock / local.workclock).
 set -euo pipefail
 cd "${0:A:h}"
-VERSION="1.5"
+VERSION="1.6"
 
-APP=build/WorkClock.app
+APP="build/Darnell Jr..app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 
@@ -26,8 +26,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleIdentifier</key><string>local.workclock</string>
-  <key>CFBundleName</key><string>WorkClock</string>
-  <key>CFBundleDisplayName</key><string>Work Clock</string>
+  <key>CFBundleName</key><string>Darnell Jr.</string>
+  <key>CFBundleDisplayName</key><string>Darnell Jr.</string>
   <key>CFBundleExecutable</key><string>WorkClock</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -36,7 +36,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>15.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSAppleEventsUsageDescription</key><string>Work Clock reads the site in your browser's front tab so only the sites you picked count as focus.</string>
+  <key>NSAppleEventsUsageDescription</key><string>Darnell Jr. reads the site in your browser's front tab so only the sites you picked count as focus.</string>
 </dict>
 </plist>
 PLIST
@@ -49,5 +49,5 @@ if [[ -z "${RELEASE:-}" ]]; then
   IDENTITY=$(security find-identity -p codesigning -v 2>/dev/null | awk -F'"' '/Apple Development/ {print $2; exit}')
 fi
 codesign --force --sign "${IDENTITY:--}" "$APP"
-if [[ -n "${RELEASE:-}" ]]; then (cd build && rm -f WorkClock.zip && ditto -c -k --keepParent WorkClock.app WorkClock.zip); fi
+if [[ -n "${RELEASE:-}" ]]; then (cd build && rm -f WorkClock.zip && ditto -c -k --keepParent "Darnell Jr..app" WorkClock.zip); fi
 echo "Built $APP"

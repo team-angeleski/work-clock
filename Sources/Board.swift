@@ -21,6 +21,12 @@ struct Friend: Decodable, Identifiable, Equatable {
     var late: Int? = nil       // minutes late today (costs a point each)
     var due_min: Int? = nil    // clock-in time in minutes after midnight, nil on a day off
     var in_min: Int? = nil     // when they clocked in today
+    var character: String? = nil        // yesterday's winner's costume for today
+    var character_name: String? = nil   // what they named it
+
+    var costume: Costume? { character.flatMap(Costume.init(rawValue:)) }
+    /// "The Champ", or whatever they named it.
+    var characterTitle: String? { costume.map { character_name ?? $0.name } }
 }
 
 struct Taunt: Decodable, Identifiable, Equatable {
@@ -36,6 +42,7 @@ private struct BoardState: Decodable {
     let incoming: [Taunt]
     let me: MeInfo?
     let mine: Mine?
+    let can_pick_character: Bool?
 }
 
 private struct Mine: Decodable {
@@ -68,6 +75,9 @@ final class Board {
     private(set) var showing: Taunt?
     /// Where my email alerts go (nil = off).
     private(set) var email: String?
+    /// I won yesterday, so I get to pick today's character.
+    private(set) var canPickCostume = false
+    var myCostume: Costume? { me?.costume }
 
     var memberID: UUID? { defaults.string(forKey: "boardMember").flatMap(UUID.init) }
     var joined: Bool { memberID != nil }
@@ -99,7 +109,8 @@ final class Board {
                           focusing: store.mode == .running && store.onTask,
                           today: max(f.today, Int(store.today)), score: score,
                           yesterday: f.yesterday, week: f.week - f.score + score,
-                          taunted_today: f.taunted_today, late: myLate, due_min: f.due_min, in_min: f.in_min)
+                          taunted_today: f.taunted_today, late: myLate, due_min: f.due_min, in_min: f.in_min,
+                          character: f.character, character_name: f.character_name)
         }
         .sorted { $0.score != $1.score ? $0.score > $1.score : $0.name < $1.name }
     }
@@ -282,6 +293,21 @@ final class Board {
         return id
     }
 
+    /// The winner dresses up for the day, optionally with their own name for the character.
+    func setCostume(_ c: Costume, name: String? = nil) async {
+        busy = true; defer { busy = false }
+        do {
+            let n = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+            _ = try await call("focus_set_character", ["p_member": memberID?.uuidString, "p_secret": secret?.uuidString,
+                                                       "p_character": c.rawValue, "p_day": Self.day(),
+                                                       "p_name": (n?.isEmpty ?? true) ? nil : n])
+            error = nil
+            // Their line, on your screen only.
+            store?.announce("“\(c.line)”", sound: nil, seconds: 6)
+            await sync()
+        } catch { self.error = describe(error) }
+    }
+
     /// Stop counting this computer toward the account. The account and its other computers carry on.
     func signOut() { forget() }
 
@@ -332,6 +358,7 @@ final class Board {
             friends = s.members
             code = s.code
             tauntsLeft = s.taunts_left
+            canPickCostume = s.can_pick_character ?? false
             if let m = s.mine { store.applyRemote(othersToday: TimeInterval(m.others_today), history: m.history) }
             if let m = s.me {
                 email = m.email

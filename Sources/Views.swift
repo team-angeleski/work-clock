@@ -95,6 +95,7 @@ struct PillView: View {
                  offTask: store.mode == .running && !store.onTask,
                  mood: store.mood,
                  blink: store.mode == .running && store.onTask ? Int(store.now.timeIntervalSince1970) / 4 : 0,
+                 costume: board.myCostume,
                  size: h * 0.52)
         }
     }
@@ -156,6 +157,7 @@ struct Ring: View {
     var mood: Double
     var blink: Int
     var dunce = false
+    var costume: Costume? = nil
     var size: CGFloat
 
     var body: some View {
@@ -172,8 +174,9 @@ struct Ring: View {
             // Equatable: only redraws when the expression, blink or colour actually changes.
             EquatableView(content: Face(mood: (mood * 20).rounded() / 20, blink: blink,
                                         tint: offTask ? .red : done ? .green : active ? .orange : .gray,
-                                        dunce: dunce))
+                                        dunce: dunce, skin: costume?.skin))
                 .frame(width: size * 0.7, height: size * 0.7)
+            if let costume { CostumeLayer(costume: costume, size: size * 0.7) }
         }
         .padding(line / 2)
     }
@@ -185,6 +188,7 @@ struct Face: View, Equatable {
     var blink: Int
     var tint: Color
     var dunce = false
+    var skin: Color? = nil
 
     var body: some View {
         GeometryReader { g in
@@ -192,7 +196,8 @@ struct Face: View, Equatable {
             let ink = Color(white: 0.12)
             ZStack {
                 Circle()
-                    .fill(LinearGradient(colors: [tint.mix(with: .white, by: 0.55), tint.mix(with: .white, by: 0.25)],
+                    .fill(LinearGradient(colors: skin.map { [$0.mix(with: .white, by: 0.18), $0] }
+                                             ?? [tint.mix(with: .white, by: 0.55), tint.mix(with: .white, by: 0.25)],
                                          startPoint: .top, endPoint: .bottom))
                 // Blush
                 HStack(spacing: w * 0.42) {
@@ -581,7 +586,7 @@ struct DetailView: View {
             if let v = updater.available {
                 HStack {
                     Image(systemName: "arrow.down.circle.fill").foregroundStyle(.blue)
-                    Text("Work Clock \(v) is out").font(.callout.weight(.semibold))
+                    Text("Darnell Jr. \(v) is out").font(.callout.weight(.semibold))
                     Spacer()
                     Button(updater.updating ? "Updating…" : "Update") { updater.install() }
                         .controlSize(.small)
@@ -717,6 +722,12 @@ struct FriendRow: View {
             Circle().fill(friend.focusing ? Color.green : Color.secondary.opacity(0.3)).frame(width: 7, height: 7)
                 .help(friend.focusing ? "Focusing right now" : "Not focusing right now")
             Text(me ? "You" : friend.name).fontWeight(me ? .bold : .regular).lineLimit(1)
+            if let c = friend.costume {
+                Text(c.badge).help(friend.characterTitle ?? c.name)
+                if !compact, let t = friend.characterTitle {
+                    Text(t).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
             if board.champions.contains(friend.id) {
                 Image(systemName: "crown.fill").foregroundStyle(.yellow).font(.caption)
                     .help("Won yesterday")
@@ -799,8 +810,9 @@ struct FriendsSection: View {
             ForEach(Array(board.ranked.enumerated()), id: \.element.id) { i, f in
                 FriendRow(board: board, rank: i + 1, friend: f)
             }
+            if board.canPickCostume { CharacterPicker(board: board) }
             if board.tauntsLeft > 0 && !board.others.isEmpty { tauntBox } else if board.friends.count > 1 {
-                Label("Win today to earn 3 taunts for tomorrow", systemImage: "crown")
+                Label("Win today: 3 taunts and a character for tomorrow", systemImage: "crown")
                     .font(.caption).foregroundStyle(.secondary)
             }
             BonusCard(store: store)

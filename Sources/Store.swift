@@ -90,6 +90,7 @@ final class Store {
 
     init() {
         load()
+        ensureLoginItem()
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
@@ -658,8 +659,16 @@ final class Store {
     var openAtLogin: Bool {
         get { SMAppService.mainApp.status == .enabled }
         set {
+            UserDefaults.standard.set(!newValue, forKey: "loginItemOff")
             if newValue { try? SMAppService.mainApp.register() } else { try? SMAppService.mainApp.unregister() }
         }
+    }
+
+    /// Opens at login unless you switched it off. Also re-registers after the app moves
+    /// (the rename to Darnell Jr. changed its location in Applications).
+    func ensureLoginItem() {
+        guard !UserDefaults.standard.bool(forKey: "loginItemOff"), SMAppService.mainApp.status != .enabled else { return }
+        try? SMAppService.mainApp.register()
     }
 
     // MARK: Persistence
