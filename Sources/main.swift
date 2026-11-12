@@ -364,6 +364,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         hidePeek()
         if details.isShown { details.performClose(nil); return }
         NSApp.activate()
+        board.nudge()   // fresh race numbers when you look
         details.contentViewController = NSHostingController(rootView: DetailView(store: store, board: board, updater: updater))
         details.show(relativeTo: host.bounds, of: host, preferredEdge: .maxY)
     }
