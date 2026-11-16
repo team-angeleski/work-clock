@@ -3,7 +3,7 @@ import Observation
 
 /// Office hours: the commitment that replaces "my boss expects me at 9".
 /// You pick a clock-in time and workdays. Changes only start tomorrow, so you can't push
-/// today's start back once you're running late. Clocking in = your first 5 focused minutes.
+/// today's start back once you're running late. Clocking in = 5 straight focused minutes; your clock-in time is when they started.
 @MainActor @Observable
 final class Office {
     private(set) var startMin: Int
@@ -15,7 +15,8 @@ final class Office {
 
     @ObservationIgnored private let d = UserDefaults.standard
     static let grace = 5          // minutes before late counts
-    static let clockInSeconds: TimeInterval = 300
+    static let clockInSeconds: TimeInterval = 300      // 5 straight focused minutes
+    static let runGap: TimeInterval = 60               // a break shorter than this doesn't reset them
 
     init() {
         startMin = d.object(forKey: "officeStart") as? Int ?? 540
@@ -93,10 +94,10 @@ final class Office {
         return Calendar.current.startOfDay(for: date).addingTimeInterval(TimeInterval(startMin * 60))
     }
 
-    /// Minutes late right now (0 within the grace period, capped at 2 hours).
-    func lateMinutes(now: Date, clockedIn: Bool) -> Int {
-        guard !clockedIn, let due = due(on: now) else { return 0 }
-        let m = Int(now.timeIntervalSince(due) / 60)
+    /// Minutes late for arriving at `at` (0 within the grace period, capped at 2 hours).
+    func lateMinutes(at: Date) -> Int {
+        guard let due = due(on: at) else { return 0 }
+        let m = Int(at.timeIntervalSince(due) / 60)
         return m <= Self.grace ? 0 : min(m, 120)
     }
 

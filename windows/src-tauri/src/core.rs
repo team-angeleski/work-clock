@@ -4,7 +4,7 @@ use crate::api::{self, BoardState, Friend};
 use crate::board::{Board, Settings};
 use crate::clock::{self, long, now};
 use crate::engine::{self, Engine, Event, Mode};
-use crate::office::Office;
+use crate::office::{Office, CLOCK_IN_SECONDS};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -65,7 +65,7 @@ impl Core {
     pub fn my_late(&self) -> i64 {
         let Some(me) = self.board.me(&self.settings.member) else { return 0 };
         if me.due_min.is_none() { return 0; }
-        me.late.unwrap_or(0).max(self.engine.office.late_minutes(self.engine.now, self.engine.clocked_in()))
+        me.late.unwrap_or(0).max(self.engine.late_now())
     }
 
     /// My live score after the lateness penalty.
@@ -123,6 +123,7 @@ impl Core {
             level: self.engine.level(), streak: self.engine.streak(),
             focusing: self.engine.mode == Mode::Running && self.engine.on_task,
             tz_minutes: clock::tz_minutes(), device: self.settings.device_id(), blown: self.engine.blown_today(),
+            clock_in: self.engine.clock_in().0.map(clock::iso), run_start: self.engine.clock_in().1.map(clock::iso),
         })
     }
 
@@ -317,7 +318,7 @@ impl Core {
             self.engine.announce("Clock in", Some("funk"), 6.0);
             self.shake();
         } else if to_go <= -900.0 && to_go > -3.0 * 3600.0 && self.once("late15") {
-            let late = self.engine.office.late_minutes(t, false);
+            let late = self.engine.late_now();
             let body = if on_board { format!("Your friends have been told. −{late} and counting.") }
                        else { "Every minute you wait makes it harder. Start with 5 minutes.".into() };
             self.notify(&format!("You're {late} minutes late"), &body);
@@ -395,6 +396,7 @@ impl Core {
 
     /// After each board sync: friends blowing their clock-in. (Friends starting come through the inbox.)
     fn board_synced(&mut self) {
+        self.engine.clocked_in_elsewhere = self.board.me(&self.settings.member).map(|m| m.in_min.is_some()).unwrap_or(false);
         let others: Vec<Friend> = self.board.others(&self.settings.member);
         for f in others.iter().filter(|f| f.due_min.is_some() && f.in_min.is_none() && f.late.unwrap_or(0) >= 15) {
             if !self.once(&format!("friendlate-{}", f.id)) { continue; }
@@ -427,7 +429,7 @@ impl Core {
         let e = &self.engine;
         let due = e.office.due(e.now)?;
         if e.clocked_in() { return None; }
-        let late = e.office.late_minutes(e.now, false);
+        let late = e.late_now();
         if late > 0 { return Some(format!("Late {late}m · clock in")); }
         let to_go = due - e.now;
         if to_go > 0.0 && to_go <= 3600.0 { Some(format!("Clock in by {}", Office::text(e.office.start_min))) } else { None }
@@ -450,10 +452,19 @@ impl Core {
             }
             Mode::Running => {
                 if !self.engine.on_task { return self.engine.off_reason.clone().map(|r| format!("Off task · {r}")).unwrap_or_else(|| "Off task".into()); }
-                if (n / 4) % 2 == 1 { if let Some(r) = self.race_line() { return r; } }
-                if self.engine.early_bird() { return "Early bird ×1.5".into(); }
+                let (at, run, focused) = self.engine.clock_in();
+                if at.is_none() && !self.engine.clocked_in_elsewhere && run.is_some() && self.engine.office.due(self.engine.now).is_some() {
+                    return format!("Clocking in · {} left", clock::clock((CLOCK_IN_SECONDS - focused).max(0.0)));
+                }
+                // Take turns every 4s: the next goal, the race, then flow or early bird.
+                let mut lines: Vec<String> = vec![];
+                if let Some((name, need)) = self.engine.next_tier() { if need > 0.0 { lines.push(format!("{} to {name}", long(need))); } }
+                let (today, goal) = (self.engine.today(), self.engine.goal());
+                if today < goal { lines.push(format!("{} to your {} goal", long(goal - today), long(goal))); }
+                if let Some(r) = self.race_line() { lines.push(r); }
                 let c = self.engine.combo_minutes();
-                if c > 0 { format!("In flow {c}m") } else { "Focusing".into() }
+                lines.push(if self.engine.early_bird() { "Early bird ×1.5".into() } else if c > 0 { format!("In flow {c}m") } else { "Focusing".into() });
+                lines[((n / 4) as usize) % lines.len()].clone()
             }
         }
     }

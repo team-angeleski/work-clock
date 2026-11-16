@@ -54,8 +54,58 @@ final class Store {
     var pressed = false
     let office = Office()
 
-    /// Clocked in = the first 5 focused minutes of the day are done.
-    var clockedIn: Bool { today >= Office.clockInSeconds }
+    /// Clocked in = 5 straight focused minutes today (here, or on another of your computers).
+    var clockedIn: Bool { clockIn.at != nil || board?.me?.in_min != nil }
+
+    /// Today's clock-in: when your first run of 5 straight focused minutes started, or the run
+    /// you're in the middle of. Breaks under a minute (a quick look at another app) don't reset it.
+    var clockIn: (at: Date?, run: Date?, focused: TimeInterval) {
+        let start = Calendar.current.startOfDay(for: now)
+        var spans = segments.filter { $0.start >= start }.map { ($0.start, $0.end) }
+        if let s = segStart, s >= start { spans.append((s, now)) }
+        var run: Date?, lastEnd = Date.distantPast, focused: TimeInterval = 0
+        for (a, b) in spans {
+            if run == nil || a.timeIntervalSince(lastEnd) > Office.runGap { run = a; focused = 0 }
+            focused += b.timeIntervalSince(a)
+            lastEnd = b
+            if focused >= Office.clockInSeconds { return (run, nil, focused) }
+        }
+        if let run, now.timeIntervalSince(lastEnd) <= Office.runGap { return (nil, run, focused) }
+        return (nil, nil, 0)
+    }
+
+    /// Minutes late today: to your clock-in, to the run you're in, or to now.
+    var lateNow: Int {
+        let c = clockIn
+        if c.at == nil, board?.me?.in_min != nil { return 0 }   // clocked in on another computer
+        return office.lateMinutes(at: c.at ?? c.run ?? now)
+    }
+
+    /// The slide-out when 5 straight minutes are done.
+    @ObservationIgnored private var clockInShown = UserDefaults.standard.string(forKey: "clockInShown")
+    private func checkClockIn() {
+        guard office.due(on: now) != nil else { return }
+        let day = Self.dayKey(now)
+        guard clockInShown != day else { return }
+        let c = clockIn
+        if let at = c.at {
+            clockInShown = day
+            UserDefaults.standard.set(day, forKey: "clockInShown")
+            guard now.timeIntervalSince(at) < 15 * 60 else { return }   // not on a late launch
+            let late = office.lateMinutes(at: at)
+            let time = Office.text(Office.minutes(from: at))
+            announce(late > 0 ? "Clocked in \(time) · \(late)m late" : "Clocked in \(time) · on time ✓",
+                     sound: late > 0 ? "Basso" : "Glass", seconds: 6)
+        } else if c.run != nil, c.focused < 2 {
+            show("Clocking in · 5 straight minutes", seconds: 4)
+        }
+    }
+
+    private static func dayKey(_ d: Date) -> String {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: d)
+        return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
+    }
+
     @ObservationIgnored weak var board: Board?
 
     /// Friends' pranks and board events surface here.
@@ -207,6 +257,7 @@ final class Store {
         if mode == .picking { pickFront() }
         watchDistractions()
         guard mode == .running else { return }
+        checkClockIn()
 
         // Split at midnight so each day gets its own time.
         if let s = segStart, !Calendar.current.isDate(s, inSameDayAs: now) {

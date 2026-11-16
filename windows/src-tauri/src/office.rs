@@ -1,11 +1,13 @@
 //! Office hours: a clock-in time and workdays. Changes start tomorrow, so today's start can't
-//! be pushed back once you're running late. Clocking in = the first 5 focused minutes. (Office.swift)
+//! be pushed back once you're running late. Clocking in = 5 straight focused minutes, timed from when they started. (Office.swift)
 
 use crate::clock;
 use serde::{Deserialize, Serialize};
 
 pub const GRACE: i64 = 5;
-pub const CLOCK_IN_SECONDS: f64 = 300.0;
+pub const CLOCK_IN_SECONDS: f64 = 300.0;   // 5 straight focused minutes
+/// A break shorter than this doesn't reset them.
+pub const RUN_GAP: f64 = 60.0;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Office {
@@ -83,11 +85,10 @@ impl Office {
         Some(clock::start_of_day(t) + (self.start_min * 60) as f64)
     }
 
-    /// Minutes late right now (0 within the grace period, capped at 2 hours).
-    pub fn late_minutes(&self, now: f64, clocked_in: bool) -> i64 {
-        if clocked_in { return 0; }
-        let Some(due) = self.due(now) else { return 0 };
-        let m = ((now - due) / 60.0) as i64;
+    /// Minutes late for arriving at `at` (0 within the grace period, capped at 2 hours).
+    pub fn late_minutes(&self, at: f64) -> i64 {
+        let Some(due) = self.due(at) else { return 0 };
+        let m = ((at - due) / 60.0) as i64;
         if m <= GRACE { 0 } else { m.min(120) }
     }
 

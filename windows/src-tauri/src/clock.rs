@@ -58,6 +58,9 @@ pub fn weekday_bit(t: f64) -> u32 { local(t).weekday().num_days_from_monday() }
 
 pub fn weekday_short(t: f64) -> String { local(t).format("%a").to_string() }
 
+/// For the server: 2026-11-16T09:07:08+08:00
+pub fn iso(t: f64) -> String { local(t).to_rfc3339() }
+
 pub fn tz_minutes() -> i32 { Local::now().offset().local_minus_utc() / 60 }
 
 pub fn time_text(t: f64) -> String {

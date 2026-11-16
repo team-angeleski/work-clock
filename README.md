@@ -45,7 +45,7 @@ Needs Windows 10 or 11 (64-bit). Already have an account on your Mac? Choose **I
 
 Working from home, nobody's waiting for you at 9. Office hours fix that:
 
-- Pick a start time and workdays. Your first 5 focused minutes clock you in.
+- Pick a start time and workdays. 5 straight focused minutes clock you in, timed from when they started (breaks under a minute are fine).
 - Late costs a point a minute after 5 minutes' grace (max 120). At 15 minutes late your friends get an email; at an hour, another.
 - Changes only take effect the next day, so you can't push today back once you're running late.
 - Until you clock in on a workday, YouTube, Instagram, TikTok and co get closed.

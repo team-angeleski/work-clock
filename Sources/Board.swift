@@ -116,7 +116,7 @@ final class Board {
         guard let store else { return 0 }
         let server = me?.late ?? 0
         guard me?.due_min != nil else { return 0 }
-        return max(server, store.office.lateMinutes(now: store.now, clockedIn: store.clockedIn))
+        return max(server, store.lateNow)
     }
 
     /// My live score after the lateness penalty.
@@ -182,7 +182,7 @@ final class Board {
 
     // MARK: The race
 
-    /// "15m to beat Cung", "Leading Cung by 20m", or nil when alone.
+    /// "15m to beat Cung", "Leading Cung by 20m", or nil when alone or the lead says nothing.
     var raceLine: String? {
         guard let store, joined, !others.isEmpty else { return nil }
         let mine = myScore
@@ -192,7 +192,9 @@ final class Board {
             let gap = Double(ahead.score - mine) / rate
             return "\(minutes(gap + 60)) to beat \(short(ahead.name))"
         }
-        let second = ranked[0]
+        // Leading only means something against someone who's actually started, and when it's close.
+        guard let second = ranked.first(where: { !($0.due_min != nil && $0.in_min == nil) }),
+              mine - second.score <= 30 * 60 else { return nil }
         return "Leading \(short(second.name)) by \(minutes(Double(mine - second.score)))"
     }
 
@@ -407,6 +409,8 @@ final class Board {
     /// Sync now (start, stop, wake) so friends see the live dot quickly.
     func nudge() { Task { await sync() } }
 
+    private static func iso(_ d: Date) -> String { ISO8601DateFormatter().string(from: d) }
+
     func sync() async {
         guard joined, let store else { return }
         lastSyncAttempt = Date()
@@ -417,7 +421,8 @@ final class Board {
                 "p_level": store.level, "p_streak": store.streak,
                 "p_focusing": store.mode == .running && store.onTask,
                 "p_tz_minutes": TimeZone.current.secondsFromGMT() / 60,
-                "p_device": Self.deviceID, "p_blown": store.blownToday])
+                "p_device": Self.deviceID, "p_blown": store.blownToday,
+                "p_clock_in": store.clockIn.at.map(Self.iso), "p_run_start": store.clockIn.run.map(Self.iso)])
             let s = try JSONDecoder().decode(BoardState.self, from: data)
             friends = s.members
             liveAt = Date()

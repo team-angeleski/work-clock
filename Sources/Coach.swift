@@ -88,7 +88,7 @@ final class Coach {
             store.announce("Clock in", sound: "Funk", seconds: 6)
             onShake?()
         } else if toGo <= -15 * 60 && toGo > -3 * 3600, once("late15") {
-            let late = store.office.lateMinutes(now: now, clockedIn: false)
+            let late = store.lateNow
             Notify.post("You're \(late) minutes late", onBoard ? "Your friends have been told. −\(late) and counting." : "Every minute you wait makes it harder. Start with 5 minutes.", id: "office")
             onShake?()
         }

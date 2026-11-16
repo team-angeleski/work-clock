@@ -1,0 +1,12 @@
+-- APPLIED 2026-11-16. Clock-in = 5 straight focused minutes, timed from when they started.
+-- The app works out the run from its own segments (breaks under a minute don't reset it) and
+-- sends p_clock_in once done, p_run_start while it's building. The 11-argument focus_sync stays
+-- for older clients (5 focused minutes, backdated).
+--
+-- Applied as a patch of the 11-argument function into a new 13-argument overload:
+--   + p_clock_in timestamptz, p_run_start timestamptz
+--   clock_in := p_clock_in  when accepted >= 290 and p_clock_in is between midnight and now() - 290s
+--   run_at   := p_run_start while not clocked in
+--   late     := late_for(due, coalesce(clock_in, run_at))
+-- tick: no alerts while a run started in the last 10 minutes and the app synced in the last 2.
+alter table focusboard.days add column if not exists run_at timestamptz;

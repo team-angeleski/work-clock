@@ -291,7 +291,7 @@ struct SetupView: View {
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.primary.opacity(0.05)))
             .padding(.bottom, 24)
             VStack(alignment: .leading, spacing: 16) {
-                feature("timer", .green, "Five minutes clocks you in", "Your first five focused minutes of the day.")
+                feature("timer", .green, "Five straight minutes clocks you in", "Timed from when you started, so 8:58 counts as 8:58.")
                 feature("minus.circle.fill", .red, "Late costs a point a minute", "After five minutes' grace. At fifteen, your friends get an email.")
                 feature("calendar.badge.clock", .orange, "Changes start tomorrow", "So you can't push today back once you're running late.")
                 feature("xmark.app.fill", .pink, "Distractions stay closed", "YouTube, Instagram and co close until you've clocked in.")

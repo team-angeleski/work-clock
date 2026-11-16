@@ -124,17 +124,30 @@ struct PillView: View {
             return store.picked.isEmpty ? "Click your apps" : "Pick, or tap for same"
         case .running:
             if !store.onTask { return store.offReason.map { "Off task · \($0)" } ?? "Off task" }
-            // Take turns every 4s: the race, then flow or early bird.
-            if let race = board.raceLine, (Int(store.now.timeIntervalSince1970) / 4) % 2 == 1 { return race }
-            if store.earlyBird { return "Early bird ×1.5" }
-            return store.comboMinutes > 0 ? "In flow \(store.comboMinutes)m" : "Focusing"
+            let c = store.clockIn
+            if !store.clockedIn, c.run != nil, store.office.due(on: store.now) != nil {
+                return "Clocking in · \(clock(max(Office.clockInSeconds - c.focused, 0))) left"
+            }
+            // Take turns every 4s: the next goal, the race, then flow or early bird.
+            var lines: [String] = goalLines
+            if let race = board.raceLine { lines.append(race) }
+            lines.append(store.earlyBird ? "Early bird ×1.5" : store.comboMinutes > 0 ? "In flow \(store.comboMinutes)m" : "Focusing")
+            return lines[(Int(store.now.timeIntervalSince1970) / 4) % lines.count]
         }
+    }
+
+    /// "7m to Grinder", "1h 20m to your 4h goal".
+    private var goalLines: [String] {
+        var out: [String] = []
+        if let next = store.nextTier, next.needed > 0 { out.append("\(long(next.needed)) to \(next.name)") }
+        if !store.goalMet { out.append("\(long(store.goal - store.today)) to your \(long(store.goal)) goal") }
+        return out
     }
 
     /// "Clock in by 9:00am" in the hour before, "Late 12m · clock in" after.
     private var officeLine: String? {
         guard let due = store.office.due(on: store.now), !store.clockedIn else { return nil }
-        let late = store.office.lateMinutes(now: store.now, clockedIn: false)
+        let late = store.lateNow
         if late > 0 { return "Late \(late)m · clock in" }
         let toGo = due.timeIntervalSince(store.now)
         return toGo > 0 && toGo <= 3600 ? "Clock in by \(Office.text(store.office.startMin))" : nil
@@ -142,7 +155,7 @@ struct PillView: View {
 
     private var subtitleStyle: AnyShapeStyle {
         if store.flash != nil { return AnyShapeStyle(.orange) }
-        if store.mode == .idle && store.office.lateMinutes(now: store.now, clockedIn: store.clockedIn) > 0 { return AnyShapeStyle(.red) }
+        if store.mode == .idle && !store.clockedIn && store.lateNow > 0 { return AnyShapeStyle(.red) }
         if store.mode == .idle && store.todayPercentile < 40 { return AnyShapeStyle(.red.opacity(0.85)) }
         if store.mode == .running && !store.onTask { return AnyShapeStyle(.red.opacity(0.9)) }
         return AnyShapeStyle(.secondary)
@@ -966,7 +979,7 @@ struct OfficeHours: View {
                     .font(.callout).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text("Your first 5 focused minutes clock you in. Late costs a point a minute after 5 minutes' grace, and at 15 minutes your friends get an email. Changes start the next day, so you can't push today back.")
+            Text("5 straight focused minutes clock you in, from when they started. Late costs a point a minute after 5 minutes' grace, and at 15 minutes your friends get an email. Changes start the next day, so you can't push today back.")
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Toggle("Close YouTube, Instagram, TikTok and co until I clock in",
@@ -979,7 +992,7 @@ struct OfficeHours: View {
         let office = store.office
         guard let due = office.due(on: store.now) else { return ("Day off", .secondary) }
         if store.clockedIn { return ("Clocked in", .green) }
-        let late = office.lateMinutes(now: store.now, clockedIn: false)
+        let late = store.lateNow
         if late > 0 { return ("\(late)m late · −\(late)", .red) }
         if store.now < due { return ("Due \(Office.text(office.startMin))", .secondary) }
         return ("Clock in now", .orange)

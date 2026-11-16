@@ -5,7 +5,7 @@
 //! - the away stretch is handed back; sessions split at midnight; sleep stops the clock.
 
 use crate::clock::{self, now};
-use crate::office::{Office, CLOCK_IN_SECONDS};
+use crate::office::{Office, CLOCK_IN_SECONDS, RUN_GAP};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -84,6 +84,9 @@ pub struct Engine {
     pub session_xp: f64,
     pub xp: f64,
     pub flash: Option<String>,
+    /// The server says you clocked in on another computer today.
+    pub clocked_in_elsewhere: bool,
+    clock_in_shown: String,
     flash_until: f64,
     pub goal_hours: f64,
     pub idle_pause: bool,
@@ -117,7 +120,7 @@ impl Engine {
     pub fn new(file: Option<std::path::PathBuf>) -> Self {
         let mut e = Engine {
             mode: Mode::Idle, picked: vec![], picking_set: vec![], on_task: false, off_reason: None,
-            combo_start: None, now: now(), session_xp: 0.0, xp: 0.0, flash: None, flash_until: 0.0,
+            combo_start: None, now: now(), session_xp: 0.0, xp: 0.0, flash: None, clocked_in_elsewhere: false, clock_in_shown: String::new(), flash_until: 0.0,
             goal_hours: 4.0, idle_pause: true, auto_goal: true, office: Office::default(), strict: false,
             names: HashMap::new(), segments: vec![], seg_start: None, seg_app: String::new(), off_since: None,
             last_save: now(), last_tick: 0.0, day_cache: HashMap::new(), others_today: 0.0,
@@ -234,6 +237,7 @@ impl Engine {
         self.watch_distractions(s);
         if self.now - self.last_save > 30.0 { self.save(); }
         if self.mode != Mode::Running { return; }
+        self.check_clock_in();
 
         // Split at midnight so each day gets its own time.
         if let Some(st) = self.seg_start {
@@ -384,7 +388,49 @@ impl Engine {
     pub fn level_progress(&self) -> f64 { let (n, l) = self.level_parts(); l / Self::cost(n) }
     pub fn xp_to_next(&self) -> i64 { let (n, l) = self.level_parts(); (Self::cost(n) - l).ceil() as i64 }
 
-    pub fn clocked_in(&self) -> bool { self.today() >= CLOCK_IN_SECONDS }
+    /// Clocked in = 5 straight focused minutes today (here, or on another of your computers).
+    pub fn clocked_in(&self) -> bool { self.clock_in().0.is_some() || self.clocked_in_elsewhere }
+
+    /// Today's clock-in: (when your first run of 5 straight focused minutes started, the run you're
+    /// in the middle of, its focused seconds). Breaks under a minute don't reset a run. (Store.swift)
+    pub fn clock_in(&self) -> (Option<f64>, Option<f64>, f64) {
+        let start = clock::start_of_day(self.now);
+        let mut spans: Vec<(f64, f64)> = self.segments.iter().filter(|s| s.start >= start).map(|s| (s.start, s.end)).collect();
+        if let Some(s) = self.seg_start { if s >= start { spans.push((s, self.now)); } }
+        let (mut run, mut last, mut focused) = (None::<f64>, f64::MIN, 0.0);
+        for (a, b) in spans {
+            if run.is_none() || a - last > RUN_GAP { run = Some(a); focused = 0.0; }
+            focused += b - a;
+            last = b;
+            if focused >= CLOCK_IN_SECONDS { return (run, None, focused); }
+        }
+        match run { Some(r) if self.now - last <= RUN_GAP => (None, Some(r), focused), _ => (None, None, 0.0) }
+    }
+
+    /// Minutes late today: to your clock-in, to the run you're in, or to now.
+    pub fn late_now(&self) -> i64 {
+        let (at, run, _) = self.clock_in();
+        if at.is_none() && self.clocked_in_elsewhere { return 0; }
+        self.office.late_minutes(at.or(run).unwrap_or(self.now))
+    }
+
+    /// The slide-out when 5 straight minutes are done.
+    fn check_clock_in(&mut self) {
+        if self.office.due(self.now).is_none() { return; }
+        let day = clock::day_key(self.now);
+        if self.clock_in_shown == day { return; }
+        let (at, run, focused) = self.clock_in();
+        if let Some(at) = at {
+            self.clock_in_shown = day;
+            if self.now - at >= 15.0 * 60.0 { return; }
+            let late = self.office.late_minutes(at);
+            let time = clock::time_text(at);
+            if late > 0 { self.announce(&format!("Clocked in {time} · {late}m late"), Some("basso"), 6.0); }
+            else { self.announce(&format!("Clocked in {time} · on time ✓"), Some("glass"), 6.0); }
+        } else if run.is_some() && focused < 2.0 {
+            self.show("Clocking in · 5 straight minutes", 4.0);
+        }
+    }
 
     // MARK: Your other computers
     // The server adds up every computer signed in to your account. Past days: whichever is larger,

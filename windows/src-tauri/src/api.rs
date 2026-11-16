@@ -134,6 +134,8 @@ pub struct SyncArgs {
     pub tz_minutes: i32,
     pub device: String,
     pub blown: bool,
+    pub clock_in: Option<String>,
+    pub run_start: Option<String>,
 }
 
 pub fn sync(a: &SyncArgs) -> Result<BoardState, ApiError> {
@@ -141,6 +143,7 @@ pub fn sync(a: &SyncArgs) -> Result<BoardState, ApiError> {
         "p_member": a.member, "p_secret": a.secret, "p_day": a.day, "p_seconds": a.seconds,
         "p_score": a.score, "p_level": a.level, "p_streak": a.streak, "p_focusing": a.focusing,
         "p_tz_minutes": a.tz_minutes, "p_device": a.device, "p_blown": a.blown,
+        "p_clock_in": a.clock_in, "p_run_start": a.run_start,
     }))?)
 }
 

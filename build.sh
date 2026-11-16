@@ -2,7 +2,7 @@
 # Builds "Darnell Jr..app" (executable and bundle id: WorkClock / local.workclock).
 set -euo pipefail
 cd "${0:A:h}"
-VERSION="2.2"
+VERSION="2.3"
 
 APP="build/Darnell Jr..app"
 rm -rf "$APP"

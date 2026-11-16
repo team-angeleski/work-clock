@@ -122,7 +122,9 @@ impl Board {
             let gap = (ahead.score - mine) as f64 / rate;
             return Some(format!("{} to beat {}", minutes(gap + 60.0), short(&ahead.name)));
         }
-        let second = &ranked[0];
+        // Leading only means something against someone who's actually started, and when it's close.
+        let second = ranked.iter().find(|f| !(f.due_min.is_some() && f.in_min.is_none()))?;
+        if mine - second.score > 30 * 60 { return None; }
         Some(format!("Leading {} by {}", short(&second.name), minutes((mine - second.score) as f64)))
     }
 
