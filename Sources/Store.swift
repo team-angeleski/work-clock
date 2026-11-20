@@ -23,6 +23,15 @@ private struct SaveFile: Codable {
     var boostUntil: Date? = nil
     var autoGoal: Bool? = nil
     var distractions: [String: Date]? = nil
+    var marks: [Mark]? = nil
+}
+
+/// Something worth counting for Stats: a blocked site, a drift to one during a session, a session.
+struct Mark: Codable {
+    enum Kind: String, Codable { case block, drift, start, stop }
+    var at: Date
+    var kind: Kind
+    var site: String? = nil
 }
 
 struct DayTotal: Identifiable {
@@ -197,6 +206,7 @@ final class Store {
         guard !picked.isEmpty else { show("Click an app first"); return }
         pickingSet = []
         mode = .running
+        mark(.start)
         sessionXP = 0
         comboStart = nil
         offSince = nil
@@ -209,6 +219,7 @@ final class Store {
 
     private func stop() {
         if onTask { close(at: Date()) }
+        mark(.stop)
         mode = .idle
         comboStart = nil
         let earned = Int(sessionXP.rounded())
@@ -275,6 +286,7 @@ final class Store {
             if Browser.isDistraction(domain) { distraction = domain; noteDistraction() }
         }
         let matches = picked.contains(key) || (picked.contains(front) && distraction == nil)
+        if distraction != driftSite { driftSite = distraction; if let d = distraction { mark(.drift, d) } }
         let working = !away && (matches || (isSelf && onTask))
         offReason = away ? "Away" : distraction
 
@@ -524,6 +536,22 @@ final class Store {
         noteDistraction()
     }
 
+    // MARK: Stats log
+
+    private(set) var marks: [Mark] = []
+    @ObservationIgnored private var driftSite: String?
+
+    func mark(_ kind: Mark.Kind, _ site: String? = nil) {
+        marks.append(Mark(at: Date(), kind: kind, site: site))
+    }
+
+    /// Closed segments plus the one running now (for Stats).
+    var allSegments: [Segment] {
+        var all = segments
+        if let s = segStart { all.append(Segment(start: s, end: now, app: segApp)) }
+        return all
+    }
+
     fileprivate func noteDistraction() {
         let key = Board.day(now)
         guard distractions[key] == nil, Calendar.current.component(.hour, from: now) < Self.cleanHour else { return }
@@ -720,7 +748,7 @@ final class Store {
         let data = SaveFile(segments: all, xp: xp, picked: picked, goalHours: goalHours, idlePause: idlePause,
                             running: mode == .running, savedAt: Date(), sessionXP: sessionXP,
                             autoGoal: autoGoal,
-                            distractions: distractions)
+                            distractions: distractions, marks: marks)
         if let json = try? JSONEncoder().encode(data) { try? json.write(to: file, options: .atomic) }
     }
 
@@ -737,6 +765,7 @@ final class Store {
         idlePause = data.idlePause
         autoGoal = data.autoGoal ?? true
         distractions = (data.distractions ?? [:]).filter { Date().timeIntervalSince($0.value) < 14 * 86400 }
+        marks = (data.marks ?? []).filter { Date().timeIntervalSince($0.at) < 120 * 86400 }
         // Restarted mid-session (an update, a crash): carry on instead of stopping.
         if data.running == true, let at = data.savedAt, Date().timeIntervalSince(at) < 300, !picked.isEmpty {
             mode = .running

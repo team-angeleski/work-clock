@@ -46,6 +46,14 @@ Needs Windows 10 or 11 (64-bit). Already have an account on your Mac? Choose **I
 - **Office hours, as a counter:** pick a time to aim for. Starting the clock clocks you in, and the late counter stops right there ("In at 9:07 · you were 7m late"). No points lost, nobody gets emailed.
 - **Picking a browser** counts every site in it except the distraction sites.
 
+## Quitting
+
+On a Mac, joining a board shows a 40-character quit code once. Write it on paper: quitting Darnell Jr. asks for all of it. Lost it? **Lost it?** opens quitting after 30 minutes. Logging out, restarting and updates are never held up. (Not on Windows yet.)
+
+## Stats
+
+**Stats…** in the panel shows your focus for the last 14 days against your goal, how often YouTube and Instagram got blocked, when you drifted mid-session, your best hours, where the time went, your sessions and when you started each day. (Mac only for now.)
+
 ## Several computers
 
 Your email is your account. On another computer (Mac or Windows), install Darnell Jr. and choose **Sign in** in setup: a 6-digit code is emailed to you. Every computer reports its own time and the server adds them up, so your clock, week, streak and the race show your total. A computer can only add as much as real time allows since it last checked in, and a day can never hold more than the hours since midnight.
@@ -71,7 +79,7 @@ Click the clock, click the apps you'll work in, click the clock again. Tap twice
 
 ## Updates
 
-Darnell Jr. checks for a new release every hour and installs it by itself as soon as you're not in a focus session (it restarts in a couple of seconds; your time and board stay). The Update button in the panel installs it straight away. After an update, macOS may ask you to switch Accessibility back on; the app opens that setting for you.
+Darnell Jr. checks for a new release every hour and installs it by itself as soon as you're not in a focus session (it restarts in a couple of seconds; your time and board stay). The Update button in the panel installs it straight away. From 2.5 the Mac app is signed with a fixed "Darnell Jr." certificate, so after that one update Accessibility stays on through later updates. If macOS asks, the app opens that setting for you.
 
 ## Build
 

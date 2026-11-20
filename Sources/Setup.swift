@@ -42,6 +42,39 @@ final class AppWindows: NSObject, NSWindowDelegate {
         present(settings)
     }
 
+    private var quitWindow: NSWindow?
+    private var stats: NSWindow?
+
+    func showStats() {
+        stats = stats ?? makeWindow(title: "Darnell Jr. Stats", size: NSSize(width: 680, height: 820))
+        stats?.styleMask.insert(.resizable)
+        stats?.contentView = NSHostingView(rootView: StatsView(store: store))
+        present(stats)
+    }
+
+    /// Once per Mac: the quit code to write down. The window can't be closed until it's confirmed.
+    func showQuitCode() {
+        guard quitWindow == nil else { return }
+        let code = QuitLock.generate()
+        let w = makeWindow(title: "Your quit code", size: NSSize(width: 520, height: 420))
+        w.styleMask.remove(.closable)
+        w.titleVisibility = .hidden
+        w.contentView = NSHostingView(rootView: QuitCodeView(code: code) { [weak self] in self?.quitWindow?.close() })
+        quitWindow = w
+        present(w)
+    }
+
+    func showQuitPrompt() {
+        if let w = quitWindow { present(w); return }
+        let w = makeWindow(title: "Quit Darnell Jr.", size: NSSize(width: 480, height: 260))
+        w.titleVisibility = .hidden
+        w.contentView = NSHostingView(rootView: QuitPromptView(
+            quit: { NSApp.terminate(nil) },
+            cancel: { [weak self] in self?.quitWindow?.close() }))
+        quitWindow = w
+        present(w)
+    }
+
     private func makeWindow(title: String, size: NSSize) -> NSWindow {
         let w = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                          styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
@@ -61,7 +94,15 @@ final class AppWindows: NSObject, NSWindowDelegate {
     func windowWillClose(_ note: Notification) {
         guard let w = note.object as? NSWindow else { return }
         w.contentView = nil
-        if w === setup { setup = nil }
+        if w === setup {
+            setup = nil
+            // Right after setup: the quit code, once.
+            if board.joined && !QuitLock.hasCode {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.showQuitCode() }
+            }
+        }
+        if w === quitWindow { quitWindow = nil }
+        if w === stats { stats = nil }
         if w === settings { settings = nil }
     }
 }

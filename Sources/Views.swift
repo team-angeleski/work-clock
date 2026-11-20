@@ -624,6 +624,7 @@ struct DetailView: View {
                 if store.mode == .picking {
                     Button("Cancel") { store.cancelPicking() }.controlSize(.small)
                 }
+                Button("Stats…") { AppWindows.shared?.showStats() }.controlSize(.small)
                 Button("Settings…") { AppWindows.shared?.showSettings() }.controlSize(.small)
                 Button("Quit") { NSApp.terminate(nil) }.controlSize(.small)
             }

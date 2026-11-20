@@ -114,6 +114,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var windows: AppWindows?
     private var askedForEmail = false
 
+    /// Quitting takes the code (unless the Mac is logging out, restarting or shutting down).
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if QuitLock.unlocked || QuitLock.systemIsQuitting || !QuitLock.hasCode {
+            store.save()
+            return .terminateNow
+        }
+        windows?.showQuitPrompt()
+        return .terminateCancel
+    }
+
     func applicationDidFinishLaunching(_ note: Notification) {
         let prompt = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(prompt)
@@ -210,6 +220,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                     }
                 }
                 snap(DetailView(store: self.store, board: self.board, updater: self.updater), "panel")
+                snap(StatsView(store: self.store, scrolls: false).frame(width: 680), "stats")
+                snap(QuitCodeView(code: "ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567-89ABC-DEFGH") {}, "quitcode")
+                snap(QuitPromptView(quit: {}, cancel: {}), "quitprompt")
                 for step in SetupView.Step.allCases {
                     snap(SetupView(store: self.store, board: self.board, emailOnly: false, startAt: step) {}, "setup-\(step)")
                 }
@@ -227,9 +240,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             }
         }
 
-        // New installs (including a friend's invite) open setup.
+        // New installs (including a friend's invite) open setup; everyone else gets a quit code once.
         if !board.joined {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.windows?.showSetup() }
+        } else if !QuitLock.hasCode {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.windows?.showQuitCode() }
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willPowerOffNotification,
+                                                          object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { QuitLock.unlocked = true }
         }
 
         // Save on quit, including `kill`, so no focused time is lost.

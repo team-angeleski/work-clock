@@ -2,7 +2,7 @@
 # Builds "Darnell Jr..app" (executable and bundle id: WorkClock / local.workclock).
 set -euo pipefail
 cd "${0:A:h}"
-VERSION="2.4"
+VERSION="2.5"
 
 APP="build/Darnell Jr..app"
 rm -rf "$APP"
@@ -41,13 +41,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Sign with the developer identity if there is one, so the Accessibility
-# permission survives rebuilds. Otherwise sign ad hoc.
-# RELEASE=1 signs anonymously (ad hoc) so the public download carries no personal certificate.
-IDENTITY=""
-if [[ -z "${RELEASE:-}" ]]; then
-  IDENTITY=$(security find-identity -p codesigning -v 2>/dev/null | awk -F'"' '/Apple Development/ {print $2; exit}')
+# Signed with a neutral self-signed certificate named "Darnell Jr." (no name or email in it), kept in
+# this Mac's login keychain. One identity for every build means macOS keeps Accessibility across
+# updates. Without it a release would change identity, so RELEASE=1 refuses to build.
+IDENTITY=$(security find-identity -p codesigning 2>/dev/null | awk '/"Darnell Jr\."/ {print $2; exit}')
+if [[ -z "$IDENTITY" ]]; then
+  [[ -n "${RELEASE:-}" ]] && { echo 'No "Darnell Jr." signing certificate in the keychain'; exit 1; }
+  IDENTITY="-"
 fi
-codesign --force --sign "${IDENTITY:--}" "$APP"
+codesign --force --sign "$IDENTITY" "$APP"
 if [[ -n "${RELEASE:-}" ]]; then (cd build && rm -f WorkClock.zip && ditto -c -k --keepParent "Darnell Jr..app" WorkClock.zip); fi
 echo "Built $APP"

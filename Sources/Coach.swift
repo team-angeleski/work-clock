@@ -99,6 +99,7 @@ final class Coach {
         lastLockCheck = now
         guard let domain = Browser.domain(of: id), Browser.isBlocked(domain) else { return }
         TabCloser.closeFrontTab(of: app)
+        store.mark(.block, domain.contains("youtube") ? "youtube.com" : "instagram.com")
         let site = domain.contains("youtube") ? "YouTube" : "Instagram"
         let left = long(Browser.blockUntilFocus - store.today)
         store.announce("\(site)'s blocked till 1pm · or \(left) more focus 🔒", sound: "Basso", seconds: 5)
