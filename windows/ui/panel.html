@@ -100,7 +100,7 @@
         <div class="row"><div class="grow">Today's score</div><div class="val" id="score"></div></div>
         <div class="row"><div class="grow">Early bird (before 9am ×1.5)</div><div class="val" id="early"></div></div>
         <div class="row"><div class="grow">Clean morning</div><div class="val" id="clean"></div></div>
-        <div class="row" id="lateRow"><div class="grow">Late to clock in</div><div class="val late" id="late"></div></div>
+        <div class="row" id="lateRow"><div class="grow">Started late by</div><div class="val late" id="late"></div></div>
         <div class="row" id="othersRow"><div class="grow">From your other computers</div><div class="val" id="others"></div></div>
       </div>
       <div class="card">
@@ -168,7 +168,6 @@
         <div class="row"><div class="grow">I start work at</div><select id="start" style="width:110px"></select></div>
         <div class="days" id="days" style="margin:8px 0"></div>
         <div class="faint" id="officeNote" style="font-size:11px"></div>
-        <div class="row" style="margin-top:6px"><div class="grow">Close YouTube, Instagram & co until I clock in</div><div class="toggle" id="lock"></div></div>
         <div class="err" id="officeErr"></div>
       </div>
       <div class="card">
@@ -181,7 +180,7 @@
         <div id="accountOn">
           <div class="row"><div class="grow"><b id="accName"></b><div class="faint" style="font-size:11px">Board <span id="accCode"></span></div></div></div>
           <div class="row"><input id="email" placeholder="you@email.com"><button onclick="saveEmail()">Save</button></div>
-          <div class="faint" style="font-size:11px">Alerts go here: friends passing you, being late, taunts. Sign in with the same email on your other computers and your time adds up.</div>
+          <div class="faint" style="font-size:11px">Alerts go here: friends passing you, taunts. Sign in with the same email on your other computers and your time adds up.</div>
           <div class="err" id="emailErr"></div>
           <div class="line"><button onclick="signOut()">Sign out of this PC</button><button class="danger" onclick="leave()">Delete account</button></div>
         </div>
@@ -230,7 +229,7 @@ onState(s => {
   $("#early").textContent = "+" + s.earlyBonus;
   $("#clean").textContent = s.clean;
   $("#lateRow").classList.toggle("hidden", !s.office.late);
-  $("#late").textContent = `−${s.office.late}m`;
+  $("#late").textContent = `${s.office.late}m`;
   $("#othersRow").classList.toggle("hidden", !s.hasOthers);
   $("#others").textContent = s.othersToday;
   const max = Math.max(3600, ...s.week.map(w => w.total));
@@ -305,9 +304,8 @@ onState(s => {
   $("#idlePause").classList.toggle("on", s.idlePause || b.joined);
   $("#idleNote").textContent = "No mouse or keyboard for 30 seconds and the time is handed back." +
     (b.joined ? " On a board, also: no key, click or scroll for 10 minutes." : "");
-  $("#lock").classList.toggle("on", s.office.lock);
   const o = s.office;
-  $("#officeNote").textContent = o.pending ? `Changes start ${o.pending}: ${timeText(o.plannedStart)}.` : "Changes start tomorrow, so today can't be pushed back once you're late. Late costs a point a minute after 5 minutes.";
+  $("#officeNote").textContent = o.pending ? `Changes start ${o.pending}: ${timeText(o.plannedStart)}.` : "Starting the clock clocks you in. Late is only a number: no points lost. Changes start tomorrow.";
   $("#accountOn").classList.toggle("hidden", !b.joined);
   $("#accountOff").classList.toggle("hidden", b.joined);
   $("#accName").textContent = b.name || "";
@@ -332,7 +330,6 @@ onState(s => {
 $("#autoGoal").onclick = () => invoke("set_goal", { auto: !state.autoGoal, hours: +$("#goalHours").value || 4 });
 $("#goalHours").onchange = () => invoke("set_goal", { auto: false, hours: +$("#goalHours").value || 4 });
 $("#idlePause").onclick = () => { if (!state.board.joined) invoke("set_idle_pause", { on: !state.idlePause }); };
-$("#lock").onclick = () => invoke("set_lock", { on: !state.office.lock });
 $("#autostart").onclick = () => { const on = !$("#autostart").classList.contains("on"); $("#autostart").classList.toggle("on", on); invoke("set_autostart", { on }); };
 $("#start").onchange = saveSchedule;
 function saveSchedule() {

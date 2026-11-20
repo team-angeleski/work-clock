@@ -3,7 +3,7 @@ import Observation
 
 /// Office hours: the commitment that replaces "my boss expects me at 9".
 /// You pick a clock-in time and workdays. Changes only start tomorrow, so you can't push
-/// today's start back once you're running late. Clocking in = 5 straight focused minutes; your clock-in time is when they started.
+/// today's start back once you're running late. Clocking in = starting the clock on your work: the first focused second.
 @MainActor @Observable
 final class Office {
     private(set) var startMin: Int
@@ -14,9 +14,10 @@ final class Office {
     var lockDistractions: Bool { didSet { d.set(lockDistractions, forKey: "officeLock") } }
 
     @ObservationIgnored private let d = UserDefaults.standard
+    /// Office hours are a counter now, not a punishment: no points lost, nobody emailed. You see how
+    /// late you were, and it stops the second you start the clock. (Penalties made work feel worse.)
+    static let enabled = true
     static let grace = 5          // minutes before late counts
-    static let clockInSeconds: TimeInterval = 300      // 5 straight focused minutes
-    static let runGap: TimeInterval = 60               // a break shorter than this doesn't reset them
 
     init() {
         startMin = d.object(forKey: "officeStart") as? Int ?? 540
@@ -90,7 +91,7 @@ final class Office {
 
     /// When you're due today, or nil on a day off.
     func due(on date: Date) -> Date? {
-        guard isWorkday(date) else { return nil }
+        guard Self.enabled, isWorkday(date) else { return nil }
         return Calendar.current.startOfDay(for: date).addingTimeInterval(TimeInterval(startMin * 60))
     }
 
@@ -112,7 +113,15 @@ final class Office {
 
 /// Closes the front tab in a browser (⌘W to that app only).
 enum TabCloser {
+    /// Asks the browser to close the tab (the same permission that reads its URL, which survives
+    /// updates); falls back to ⌘W, which needs Accessibility.
     static func closeFrontTab(of app: NSRunningApplication) {
+        if let id = app.bundleIdentifier, Browser.isBrowser(id) {
+            let tab = id == "com.apple.Safari" ? "current tab" : "active tab"
+            var error: NSDictionary?
+            NSAppleScript(source: "tell application id \"\(id)\" to close \(tab) of front window")?.executeAndReturnError(&error)
+            if error == nil { return }
+        }
         let src = CGEventSource(stateID: .hidSystemState)
         let down = CGEvent(keyboardEventSource: src, virtualKey: 13, keyDown: true)   // W
         let up = CGEvent(keyboardEventSource: src, virtualKey: 13, keyDown: false)

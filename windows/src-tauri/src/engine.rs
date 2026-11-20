@@ -5,7 +5,7 @@
 //! - the away stretch is handed back; sessions split at midnight; sleep stops the clock.
 
 use crate::clock::{self, now};
-use crate::office::{Office, CLOCK_IN_SECONDS, RUN_GAP};
+use crate::office::Office;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -21,6 +21,15 @@ const SPREAD: f64 = 0.6;
 /// Sites that never count unless you picked them yourself.
 pub const DISTRACTIONS: [&str; 9] = ["youtube.com", "tiktok.com", "instagram.com", "facebook.com", "x.com",
     "twitter.com", "reddit.com", "netflix.com", "twitch.tv"];
+
+/// Closed on sight until 1pm, or until 2 hours of focus today.
+pub const MORNING_BLOCK: [&str; 2] = ["instagram.com", "youtube.com"];
+pub const BLOCK_UNTIL_HOUR: u32 = 13;
+pub const BLOCK_UNTIL_FOCUS: f64 = 2.0 * 3600.0;
+
+pub fn is_blocked(domain: &str) -> bool {
+    MORNING_BLOCK.iter().any(|d| domain == *d || domain.ends_with(&format!(".{d}")))
+}
 
 pub fn is_distraction(domain: &str) -> bool {
     DISTRACTIONS.iter().any(|d| domain == *d || domain.ends_with(&format!(".{d}")))
@@ -176,6 +185,9 @@ impl Engine {
 
     fn start(&mut self) {
         if !self.picking_set.is_empty() { self.picked = std::mem::take(&mut self.picking_set); }
+        // Older picks named single sites ("chrome.exe|crm…"): a browser now counts as a whole.
+        let mut seen = std::collections::HashSet::new();
+        self.picked = self.picked.iter().map(|k| k.split('|').next().unwrap_or(k).to_string()).filter(|k| seen.insert(k.clone())).collect();
         if self.picked.is_empty() { self.show("Click an app first", 3.0); return; }
         self.picking_set.clear();
         self.mode = Mode::Running;
@@ -204,13 +216,8 @@ impl Engine {
     fn pick_front(&mut self, s: &mut dyn Senses) {
         let Some(front) = s.front() else { return };
         if front.is_empty() || s.is_self(&front) { return; }
-        let mut key = front.clone();
-        if s.is_browser(&front) {
-            if let Some(domain) = s.domain() {
-                if domain.is_empty() { return; } // new tab or settings page: wait for a real site
-                key = format!("{front}|{domain}");
-            }
-        }
+        // A browser counts as a whole: every site in it, except YouTube, Instagram and co.
+        let key = front.clone();
         if self.picking_set.contains(&key) || self.picking_set.len() >= 8 { return; }
         if !self.names.contains_key(&front) { let n = s.display_name(&front); self.names.insert(front.clone(), n); }
         self.picking_set.push(key.clone());
@@ -388,48 +395,34 @@ impl Engine {
     pub fn level_progress(&self) -> f64 { let (n, l) = self.level_parts(); l / Self::cost(n) }
     pub fn xp_to_next(&self) -> i64 { let (n, l) = self.level_parts(); (Self::cost(n) - l).ceil() as i64 }
 
-    /// Clocked in = 5 straight focused minutes today (here, or on another of your computers).
-    pub fn clocked_in(&self) -> bool { self.clock_in().0.is_some() || self.clocked_in_elsewhere }
+    /// Clocked in = you started the clock on your work today (here, or on another computer).
+    pub fn clocked_in(&self) -> bool { self.clock_in_at().is_some() || self.clocked_in_elsewhere }
 
-    /// Today's clock-in: (when your first run of 5 straight focused minutes started, the run you're
-    /// in the middle of, its focused seconds). Breaks under a minute don't reset a run. (Store.swift)
-    pub fn clock_in(&self) -> (Option<f64>, Option<f64>, f64) {
+    /// The first focused second today on this computer.
+    pub fn clock_in_at(&self) -> Option<f64> {
         let start = clock::start_of_day(self.now);
-        let mut spans: Vec<(f64, f64)> = self.segments.iter().filter(|s| s.start >= start).map(|s| (s.start, s.end)).collect();
-        if let Some(s) = self.seg_start { if s >= start { spans.push((s, self.now)); } }
-        let (mut run, mut last, mut focused) = (None::<f64>, f64::MIN, 0.0);
-        for (a, b) in spans {
-            if run.is_none() || a - last > RUN_GAP { run = Some(a); focused = 0.0; }
-            focused += b - a;
-            last = b;
-            if focused >= CLOCK_IN_SECONDS { return (run, None, focused); }
-        }
-        match run { Some(r) if self.now - last <= RUN_GAP => (None, Some(r), focused), _ => (None, None, 0.0) }
+        self.segments.iter().find(|s| s.start >= start).map(|s| s.start).or(self.seg_start.filter(|s| *s >= start))
     }
 
-    /// Minutes late today: to your clock-in, to the run you're in, or to now.
+    /// Minutes late today: to when you started, or to now. Just a number, it costs nothing.
     pub fn late_now(&self) -> i64 {
-        let (at, run, _) = self.clock_in();
+        let at = self.clock_in_at();
         if at.is_none() && self.clocked_in_elsewhere { return 0; }
-        self.office.late_minutes(at.or(run).unwrap_or(self.now))
+        self.office.late_minutes(at.unwrap_or(self.now))
     }
 
-    /// The slide-out when 5 straight minutes are done.
+    /// One slide-out the moment you start: "On time ✓" or "You were 12m late".
     fn check_clock_in(&mut self) {
         if self.office.due(self.now).is_none() { return; }
+        let Some(at) = self.clock_in_at() else { return };
         let day = clock::day_key(self.now);
         if self.clock_in_shown == day { return; }
-        let (at, run, focused) = self.clock_in();
-        if let Some(at) = at {
-            self.clock_in_shown = day;
-            if self.now - at >= 15.0 * 60.0 { return; }
-            let late = self.office.late_minutes(at);
-            let time = clock::time_text(at);
-            if late > 0 { self.announce(&format!("Clocked in {time} · {late}m late"), Some("basso"), 6.0); }
-            else { self.announce(&format!("Clocked in {time} · on time ✓"), Some("glass"), 6.0); }
-        } else if run.is_some() && focused < 2.0 {
-            self.show("Clocking in · 5 straight minutes", 4.0);
-        }
+        self.clock_in_shown = day;
+        if self.now - at >= 120.0 { return; }
+        let late = self.office.late_minutes(at);
+        let time = clock::time_text(at);
+        if late > 0 { self.announce(&format!("In at {time} · you were {late}m late"), None, 5.0); }
+        else { self.announce(&format!("In at {time} · on time ✓"), Some("glass"), 5.0); }
     }
 
     // MARK: Your other computers

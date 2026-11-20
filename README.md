@@ -35,20 +35,16 @@ Needs Windows 10 or 11 (64-bit). Already have an account on your Mac? Choose **I
 ## How scoring works
 
 - 1 point per focused minute in the apps or sites you picked.
-- **Late:** −1 per minute late to clock in (see Office hours).
 - **Early bird:** focus before 9am counts 1.5×.
 - **Clean morning:** no Instagram, YouTube, TikTok, X, Reddit, Facebook, Netflix or Twitch before 1pm, plus at least an hour of focus by then: +30.
 - No mouse or keyboard for 30 seconds, or no key, click or scroll for 10 minutes, and the time is handed back.
 - The server only accepts focus that fits in the real time since your last check-in.
 
-## Office hours
+## Mornings
 
-Working from home, nobody's waiting for you at 9. Office hours fix that:
-
-- Pick a start time and workdays. 5 straight focused minutes clock you in, timed from when they started (breaks under a minute are fine).
-- Late costs a point a minute after 5 minutes' grace (max 120). At 15 minutes late your friends get an email; at an hour, another.
-- Changes only take effect the next day, so you can't push today back once you're running late.
-- Until you clock in on a workday, YouTube, Instagram, TikTok and co get closed.
+- **The block:** YouTube and Instagram close on sight until 1pm, or until you've done 2 hours of focus that day. Every day, no setting.
+- **Office hours, as a counter:** pick a time to aim for. Starting the clock clocks you in, and the late counter stops right there ("In at 9:07 · you were 7m late"). No points lost, nobody gets emailed.
+- **Picking a browser** counts every site in it except the distraction sites.
 
 ## Several computers
 
@@ -58,14 +54,14 @@ Settings → Account → **Sign Out** stops counting that one computer; **Delete
 
 ## Email alerts
 
-Your email is part of your account (required to join). You get an email when a friend passes you, when you're late, and when you're taunted. Sent by the database (pg_cron + pg_net) through Resend.
+Your email is part of your account (required to join). You get an email when a friend passes you and when you're taunted. Sent by the database (pg_cron + pg_net) through Resend.
 
 ## The coach
 
 Small pushes back to work, all as Mac notifications plus a shake of the clock:
 
 - **Drifting:** on a distraction site mid-session, the clock shakes at 20s and 60s and notifies you at 2 minutes. In any other non-work app: a shake at 90s, a notification at 5 minutes. Idle time never nags.
-- **Clock in:** a reminder 10 minutes before your start, a shake at your start time, and a nudge at 15 minutes late.
+- **Mornings:** YouTube and Instagram close on sight until 1pm or 2 hours of focus.
 - **Not started:** at your Mac for 15 minutes without starting, you get your rank and the race. Again at 90 minutes.
 - **Friends:** a notification within seconds when a friend starts working (once per 20 minutes per friend), when someone overtakes you, and when you take the lead. Taunts pop up straight away.
 - **Streak at risk:** at 8pm, if your goal isn't hit and you have a streak going.

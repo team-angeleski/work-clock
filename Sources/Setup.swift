@@ -158,7 +158,7 @@ struct SetupView: View {
                 feature("cursorarrow.click.2", .blue, "Pick, then focus", "Click the clock, click the apps you work in, then click it again to start.")
                 feature("eye.fill", .orange, "Only real work counts", "Drift to YouTube and it stops, and gives you a nudge back.")
                 feature("trophy.fill", .yellow, "Race your friends", "Win the day and you get three taunts that pop up on their screens.")
-                feature("building.2.fill", .indigo, "Office hours", "Pick a start time. Being late costs points, and your friends hear about it.")
+                feature("lock.fill", .indigo, "Mornings without the scroll", "YouTube and Instagram stay closed until 1pm, or until you've done 2 hours.")
             }
         }
     }
@@ -174,7 +174,7 @@ struct SetupView: View {
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
                 }
                 permission(ok: notifyOK, icon: "bell.badge.fill", tint: .red, title: "Notifications",
-                           detail: "Nudges when you drift, when you're nearly late, and when a friend starts.", action: "Allow") {
+                           detail: "Nudges when you drift, and when a friend starts.", action: "Allow") {
                     Notify.ask()
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
                 }
@@ -201,7 +201,6 @@ struct SetupView: View {
                 Text("You'll get an email, even with your Mac shut, when:")
                     .font(.callout).foregroundStyle(.secondary)
                 feature("figure.run", .green, "A friend passes you", nil)
-                feature("alarm.fill", .red, "You're late to clock in", nil)
                 feature("crown.fill", .yellow, "Someone spends a taunt on you", nil)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -277,7 +276,7 @@ struct SetupView: View {
     private var office: some View {
         VStack(spacing: 0) {
             hero("building.2.fill", .indigo)
-            title("Office hours", "At home nobody's waiting for you at 9. Now someone is.")
+            title("Office hours", "At home nobody's waiting for you at 9. Pick a time to aim for.")
             VStack(spacing: 14) {
                 HStack(spacing: 10) {
                     Text("I start work at").font(.title3)
@@ -291,10 +290,9 @@ struct SetupView: View {
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.primary.opacity(0.05)))
             .padding(.bottom, 24)
             VStack(alignment: .leading, spacing: 16) {
-                feature("timer", .green, "Five straight minutes clocks you in", "Timed from when you started, so 8:58 counts as 8:58.")
-                feature("minus.circle.fill", .red, "Late costs a point a minute", "After five minutes' grace. At fifteen, your friends get an email.")
-                feature("calendar.badge.clock", .orange, "Changes start tomorrow", "So you can't push today back once you're running late.")
-                feature("xmark.app.fill", .pink, "Distractions stay closed", "YouTube, Instagram and co close until you've clocked in.")
+                feature("play.circle.fill", .green, "Starting the clock clocks you in", "The late counter stops right there.")
+                feature("number.circle.fill", .orange, "Late is just a number", "No points lost, nobody gets told. You just see it.")
+                feature("calendar.badge.clock", .indigo, "Changes start tomorrow", "So today's time stays honest.")
             }
         }
     }
@@ -337,7 +335,7 @@ struct SetupView: View {
             VStack(alignment: .leading, spacing: 18) {
                 feature("cursorarrow.click", .blue, "Click the clock to start", "Then click your work apps, and click the clock again.")
                 feature("cursorarrow.click.badge.clock", .orange, "Right-click for the race", "Your week, your rank, and taunts when you've won.")
-                feature("gearshape.fill", .gray, "Settings live there too", "Office hours, email, your board.")
+                feature("gearshape.fill", .gray, "Settings live there too", "Your goal, email, your board.")
             }
         }
     }
@@ -610,12 +608,12 @@ struct SettingsView: View {
                 row("clock", "1 point per focused minute")
                 row("sunrise.fill", "Before 9am, minutes count 1.5×")
                 row("leaf.fill", "No socials before 1pm + an hour of focus: +30")
-                row("building.2.fill", "Late to clock in: −1 a minute after 5 minutes' grace (max −120)")
+                row("lock.fill", "YouTube and Instagram close until 1pm, or until 2 hours of focus")
             }
             Section("Winning") {
                 row("crown.fill", Costume.enabled ? "Top score wins the day: 3 taunts, and you unlock a legend to play as the next day"
                                                   : "Top score wins the day and gets 3 taunts the next day")
-                row("envelope.fill", "Friends get emailed when you pass them, and when you're 15 minutes late")
+                row("envelope.fill", "Friends get emailed when you pass them")
             }
             Section("Fair play") {
                 row("moon.zzz.fill", "No mouse or keyboard for 30 seconds and the time is handed back")
@@ -650,7 +648,7 @@ struct AccountSettings: View {
                                 .disabled(email.trimmingCharacters(in: .whitespaces) == (board.email ?? "") || !email.contains("@"))
                         }
                     }
-                    Text("Alerts go here: friends passing you, being late, taunts. You can change it, not turn it off.")
+                    Text("Alerts go here: friends passing you, taunts. You can change it, not turn it off.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Board") {

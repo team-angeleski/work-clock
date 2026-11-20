@@ -80,33 +80,28 @@ final class Coach {
         guard let due = store.office.due(on: now), !store.clockedIn, store.mode != .running else { return }
         let toGo = due.timeIntervalSince(now)
         let at = Office.text(store.office.startMin)
-        let onBoard = board?.joined == true && !(board?.others.isEmpty ?? true)
         if toGo <= 600 && toGo > 0, once("soon") {
-            Notify.post("Clock in by \(at)", "10 minutes." + (onBoard ? " Late costs a point a minute, and your friends get told." : ""), id: "office")
+            Notify.post("Start by \(at)", "10 minutes. One click on your clock.", id: "office")
         } else if toGo <= 0 && toGo > -3600, once("due") {
-            Notify.post("It's \(at). Clock in.", "One click on your clock, pick your apps, go.", id: "office")
-            store.announce("Clock in", sound: "Funk", seconds: 6)
-            onShake?()
-        } else if toGo <= -15 * 60 && toGo > -3 * 3600, once("late15") {
-            let late = store.lateNow
-            Notify.post("You're \(late) minutes late", onBoard ? "Your friends have been told. −\(late) and counting." : "Every minute you wait makes it harder. Start with 5 minutes.", id: "office")
-            onShake?()
+            Notify.post("It's \(at)", "One click on your clock, pick your apps, go. Starting is the whole job.", id: "office")
         }
     }
 
-    /// Before you've clocked in on a workday, distracting sites get closed.
+    /// Instagram and YouTube are closed on sight until 1pm, or until 2 hours of focus today.
+    /// Every day, no setting: a flat block beats willpower.
     private var lastLockCheck = Date.distantPast
     private func lockDistractions(_ store: Store, _ now: Date) {
-        guard store.office.lockDistractions, store.office.isWorkday(now), !store.clockedIn,
-              Calendar.current.component(.hour, from: now) >= 5,
-              now.timeIntervalSince(lastLockCheck) >= 4,
+        let hour = Calendar.current.component(.hour, from: now)
+        guard hour >= 4, hour < Browser.blockUntilHour, store.today < Browser.blockUntilFocus,
+              now.timeIntervalSince(lastLockCheck) >= 2,
               let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier,
               Browser.isBrowser(id) else { return }
         lastLockCheck = now
-        guard let domain = Browser.domain(of: id), Browser.isDistraction(domain) else { return }
+        guard let domain = Browser.domain(of: id), Browser.isBlocked(domain) else { return }
         TabCloser.closeFrontTab(of: app)
-        store.announce("Clock in first 🔒", sound: "Basso", seconds: 5)
-        onShake?()
+        let site = domain.contains("youtube") ? "YouTube" : "Instagram"
+        let left = long(Browser.blockUntilFocus - store.today)
+        store.announce("\(site)'s blocked till 1pm · or \(left) more focus 🔒", sound: "Basso", seconds: 5)
     }
 
     // MARK: 5. Streak about to break

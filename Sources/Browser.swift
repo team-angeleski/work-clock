@@ -32,6 +32,15 @@ enum Browser {
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
+    /// Closed on sight until 1pm, or until 2 hours of focus today.
+    static let morningBlock = ["instagram.com", "youtube.com"]
+    static let blockUntilHour = 13
+    static let blockUntilFocus: TimeInterval = 2 * 3600
+
+    static func isBlocked(_ domain: String) -> Bool {
+        morningBlock.contains { domain == $0 || domain.hasSuffix("." + $0) }
+    }
+
     static func isDistraction(_ domain: String) -> Bool {
         distractions.contains { domain == $0 || domain.hasSuffix("." + $0) }
     }

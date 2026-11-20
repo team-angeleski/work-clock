@@ -1,13 +1,13 @@
 //! Office hours: a clock-in time and workdays. Changes start tomorrow, so today's start can't
-//! be pushed back once you're running late. Clocking in = 5 straight focused minutes, timed from when they started. (Office.swift)
+//! be pushed back once you're running late. Clocking in = starting the clock on your work. (Office.swift)
 
 use crate::clock;
 use serde::{Deserialize, Serialize};
 
 pub const GRACE: i64 = 5;
-pub const CLOCK_IN_SECONDS: f64 = 300.0;   // 5 straight focused minutes
-/// A break shorter than this doesn't reset them.
-pub const RUN_GAP: f64 = 60.0;
+/// Office hours are a counter, not a punishment: no points lost, nobody emailed. Starting the
+/// clock clocks you in and stops the counter. (Office.swift)
+pub const ENABLED: bool = true;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Office {
@@ -81,7 +81,7 @@ impl Office {
 
     /// When you're due on the day holding `t`, or None on a day off.
     pub fn due(&self, t: f64) -> Option<f64> {
-        if !self.is_workday(t) { return None; }
+        if !ENABLED || !self.is_workday(t) { return None; }
         Some(clock::start_of_day(t) + (self.start_min * 60) as f64)
     }
 

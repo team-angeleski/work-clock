@@ -116,13 +116,13 @@ final class Board {
         guard let store else { return 0 }
         let server = me?.late ?? 0
         guard me?.due_min != nil else { return 0 }
-        return max(server, store.lateNow)
+        return max(server, store.lateNow)   // shown only: it isn't taken off your score
     }
 
     /// My live score after the lateness penalty.
     var myScore: Int {
         guard let store else { return 0 }
-        return max(me?.score ?? 0, max(0, Int(store.todayScore) - myLate * 60))
+        return max(me?.score ?? 0, Int(store.todayScore))
     }
 
     /// The race with my own row using my live numbers (the server's copy lags a few minutes).
@@ -422,7 +422,7 @@ final class Board {
                 "p_focusing": store.mode == .running && store.onTask,
                 "p_tz_minutes": TimeZone.current.secondsFromGMT() / 60,
                 "p_device": Self.deviceID, "p_blown": store.blownToday,
-                "p_clock_in": store.clockIn.at.map(Self.iso), "p_run_start": store.clockIn.run.map(Self.iso)])
+                "p_clock_in": store.clockInAt.map(Self.iso), "p_run_start": nil as String?])
             let s = try JSONDecoder().decode(BoardState.self, from: data)
             friends = s.members
             liveAt = Date()

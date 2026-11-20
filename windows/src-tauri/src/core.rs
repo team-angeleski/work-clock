@@ -4,7 +4,7 @@ use crate::api::{self, BoardState, Friend};
 use crate::board::{Board, Settings};
 use crate::clock::{self, long, now};
 use crate::engine::{self, Engine, Event, Mode};
-use crate::office::{Office, CLOCK_IN_SECONDS};
+use crate::office::Office;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -71,8 +71,7 @@ impl Core {
     /// My live score after the lateness penalty.
     pub fn my_score(&mut self) -> i64 {
         let server = self.board.me(&self.settings.member).map(|m| m.score).unwrap_or(0);
-        let late = self.my_late();
-        server.max((self.engine.today_score() as i64 - late * 60).max(0))
+        server.max(self.engine.today_score() as i64)   // being late is shown, never taken off
     }
 
     /// The race with my own row using my live numbers (the server's copy lags a few minutes).
@@ -123,7 +122,7 @@ impl Core {
             level: self.engine.level(), streak: self.engine.streak(),
             focusing: self.engine.mode == Mode::Running && self.engine.on_task,
             tz_minutes: clock::tz_minutes(), device: self.settings.device_id(), blown: self.engine.blown_today(),
-            clock_in: self.engine.clock_in().0.map(clock::iso), run_start: self.engine.clock_in().1.map(clock::iso),
+            clock_in: self.engine.clock_in_at().map(clock::iso), run_start: None,
         })
     }
 
@@ -309,32 +308,24 @@ impl Core {
         if self.engine.clocked_in() || self.engine.mode == Mode::Running { return; }
         let to_go = due - t;
         let at = Office::text(self.engine.office.start_min);
-        let on_board = self.on_board_with_friends();
         if to_go <= 600.0 && to_go > 0.0 && self.once("soon") {
-            let extra = if on_board { " Late costs a point a minute, and your friends get told." } else { "" };
-            self.notify(&format!("Clock in by {at}"), &format!("10 minutes.{extra}"));
+            self.notify(&format!("Start by {at}"), "10 minutes. One click on your clock.");
         } else if to_go <= 0.0 && to_go > -3600.0 && self.once("due") {
-            self.notify(&format!("It's {at}. Clock in."), "One click on your clock, pick your apps, go.");
-            self.engine.announce("Clock in", Some("funk"), 6.0);
-            self.shake();
-        } else if to_go <= -900.0 && to_go > -3.0 * 3600.0 && self.once("late15") {
-            let late = self.engine.late_now();
-            let body = if on_board { format!("Your friends have been told. −{late} and counting.") }
-                       else { "Every minute you wait makes it harder. Start with 5 minutes.".into() };
-            self.notify(&format!("You're {late} minutes late"), &body);
-            self.shake();
+            self.notify(&format!("It's {at}"), "One click on your clock, pick your apps, go. Starting is the whole job.");
         }
     }
 
-    /// Before you've clocked in on a workday, distracting sites get closed.
+    /// Instagram and YouTube are closed on sight until 1pm, or until 2 hours of focus today.
+    /// Every day, no setting. (Coach.swift)
     fn lock_distractions(&mut self, t: f64, domain: Option<String>) -> bool {
-        if !self.engine.office.lock_distractions || !self.engine.office.is_workday(t) || self.engine.clocked_in()
-            || clock::hour(t) < 5 || t - self.last_lock_check < 4.0 { return false; }
+        let today = self.engine.today();
+        if clock::hour(t) < 4 || clock::hour(t) >= engine::BLOCK_UNTIL_HOUR || today >= engine::BLOCK_UNTIL_FOCUS
+            || t - self.last_lock_check < 2.0 { return false; }
         let Some(d) = domain else { return false };
         self.last_lock_check = t;
-        if !engine::is_distraction(&d) { return false; }
-        self.engine.announce("Clock in first 🔒", Some("basso"), 5.0);
-        self.shake();
+        if !engine::is_blocked(&d) { return false; }
+        let site = if d.contains("youtube") { "YouTube" } else { "Instagram" };
+        self.engine.announce(&format!("{site}'s blocked till 1pm · or {} more focus 🔒", long(engine::BLOCK_UNTIL_FOCUS - today)), Some("basso"), 5.0);
         true
     }
 
@@ -452,10 +443,6 @@ impl Core {
             }
             Mode::Running => {
                 if !self.engine.on_task { return self.engine.off_reason.clone().map(|r| format!("Off task · {r}")).unwrap_or_else(|| "Off task".into()); }
-                let (at, run, focused) = self.engine.clock_in();
-                if at.is_none() && !self.engine.clocked_in_elsewhere && run.is_some() && self.engine.office.due(self.engine.now).is_some() {
-                    return format!("Clocking in · {} left", clock::clock((CLOCK_IN_SECONDS - focused).max(0.0)));
-                }
                 // Take turns every 4s: the next goal, the race, then flow or early bird.
                 let mut lines: Vec<String> = vec![];
                 if let Some((name, need)) = self.engine.next_tier() { if need > 0.0 { lines.push(format!("{} to {name}", long(need))); } }

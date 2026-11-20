@@ -54,51 +54,36 @@ final class Store {
     var pressed = false
     let office = Office()
 
-    /// Clocked in = 5 straight focused minutes today (here, or on another of your computers).
-    var clockedIn: Bool { clockIn.at != nil || board?.me?.in_min != nil }
+    /// Clocked in = you started the clock on your work today (here, or on another computer).
+    var clockedIn: Bool { clockInAt != nil || board?.me?.in_min != nil }
 
-    /// Today's clock-in: when your first run of 5 straight focused minutes started, or the run
-    /// you're in the middle of. Breaks under a minute (a quick look at another app) don't reset it.
-    var clockIn: (at: Date?, run: Date?, focused: TimeInterval) {
+    /// The first focused second today on this computer.
+    var clockInAt: Date? {
         let start = Calendar.current.startOfDay(for: now)
-        var spans = segments.filter { $0.start >= start }.map { ($0.start, $0.end) }
-        if let s = segStart, s >= start { spans.append((s, now)) }
-        var run: Date?, lastEnd = Date.distantPast, focused: TimeInterval = 0
-        for (a, b) in spans {
-            if run == nil || a.timeIntervalSince(lastEnd) > Office.runGap { run = a; focused = 0 }
-            focused += b.timeIntervalSince(a)
-            lastEnd = b
-            if focused >= Office.clockInSeconds { return (run, nil, focused) }
-        }
-        if let run, now.timeIntervalSince(lastEnd) <= Office.runGap { return (nil, run, focused) }
-        return (nil, nil, 0)
+        if let first = segments.first(where: { $0.start >= start }) { return first.start }
+        if let s = segStart, s >= start { return s }
+        return nil
     }
 
-    /// Minutes late today: to your clock-in, to the run you're in, or to now.
+    /// Minutes late today: to when you started, or to now. Just a number, it costs nothing.
     var lateNow: Int {
-        let c = clockIn
-        if c.at == nil, board?.me?.in_min != nil { return 0 }   // clocked in on another computer
-        return office.lateMinutes(at: c.at ?? c.run ?? now)
+        if clockInAt == nil, board?.me?.in_min != nil { return 0 }   // started on another computer
+        return office.lateMinutes(at: clockInAt ?? now)
     }
 
-    /// The slide-out when 5 straight minutes are done.
+    /// One slide-out the moment you start: "On time ✓" or "You were 12m late".
     @ObservationIgnored private var clockInShown = UserDefaults.standard.string(forKey: "clockInShown")
     private func checkClockIn() {
-        guard office.due(on: now) != nil else { return }
+        guard office.due(on: now) != nil, let at = clockInAt else { return }
         let day = Self.dayKey(now)
         guard clockInShown != day else { return }
-        let c = clockIn
-        if let at = c.at {
-            clockInShown = day
-            UserDefaults.standard.set(day, forKey: "clockInShown")
-            guard now.timeIntervalSince(at) < 15 * 60 else { return }   // not on a late launch
-            let late = office.lateMinutes(at: at)
-            let time = Office.text(Office.minutes(from: at))
-            announce(late > 0 ? "Clocked in \(time) · \(late)m late" : "Clocked in \(time) · on time ✓",
-                     sound: late > 0 ? "Basso" : "Glass", seconds: 6)
-        } else if c.run != nil, c.focused < 2 {
-            show("Clocking in · 5 straight minutes", seconds: 4)
-        }
+        clockInShown = day
+        UserDefaults.standard.set(day, forKey: "clockInShown")
+        guard now.timeIntervalSince(at) < 120 else { return }
+        let late = office.lateMinutes(at: at)
+        let time = Office.text(Office.minutes(from: at))
+        announce(late > 0 ? "In at \(time) · you were \(late)m late" : "In at \(time) · on time ✓",
+                 sound: late > 0 ? nil : "Glass", seconds: 5)
     }
 
     private static func dayKey(_ d: Date) -> String {
@@ -206,6 +191,9 @@ final class Store {
 
     private func start() {
         if !pickingSet.isEmpty { picked = pickingSet }
+        // Older picks named single sites ("Chrome|crm…"): a browser now counts as a whole.
+        var seen = Set<String>()
+        picked = picked.map { Browser.split($0).bundle }.filter { seen.insert($0).inserted }
         guard !picked.isEmpty else { show("Click an app first"); return }
         pickingSet = []
         mode = .running
@@ -236,11 +224,9 @@ final class Store {
     private func pickFront() {
         guard mode == .picking,
               let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier, front != selfID else { return }
-        var key = front
-        if Browser.isBrowser(front), let domain = Browser.domain(of: front) {
-            guard !domain.isEmpty else { return }   // new tab or settings page: wait for a real site
-            key = "\(front)|\(domain)"
-        }
+        // A browser counts as a whole: every site in it, except YouTube, Instagram and co.
+        // (Picking site by site meant clicking through every tab.)
+        let key = front
         guard !pickingSet.contains(key), pickingSet.count < 8 else { return }
         pickingSet.append(key)
         NSSound(named: "Tink")?.play()

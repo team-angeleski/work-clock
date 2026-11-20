@@ -412,8 +412,8 @@ fn tick_loop(app: AppHandle, core: Arc<Mutex<Core>>, nudge: mpsc::Sender<()>) {
             let idle = senses.idle();
             let mut close = false;
             if n % 2 == 0 {
-                // The site in front matters to the coach only while distractions are locked.
-                let domain = if c.engine.office.lock_distractions && !c.engine.clocked_in() {
+                // The site in front matters to the coach only while the morning block is on.
+                let domain = if clock::hour(clock::now()) < engine::BLOCK_UNTIL_HOUR && c.engine.today() < engine::BLOCK_UNTIL_FOCUS {
                     match senses.front() { Some(f) if senses.is_browser(&f) => senses.domain(), _ => None }
                 } else { None };
                 close = c.coach_step(idle, domain);
