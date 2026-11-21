@@ -220,7 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                         try? png.write(to: URL(fileURLWithPath: "/tmp/workclock-\(name).png"))
                     }
                 }
-                snap(DetailView(store: self.store, board: self.board, updater: self.updater), "panel")
+                snap(DetailView(store: self.store, board: self.board, updater: self.updater, preset: Numbers(store: self.store)), "panel")
                 snap(StatsView(store: self.store, scrolls: false).frame(width: 680), "stats")
                 snap(WeekPeek(store: self.store, board: self.board), "hover")
                 snap(QuitCodeView(code: "ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567-89ABC-DEFGH") {}, "quitcode")

@@ -272,3 +272,150 @@ struct StatsView: View {
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.primary.opacity(0.04)))
     }
 }
+
+// MARK: The numbers, for the right-click panel
+
+/// The nerdy figures: averages, trends and ratios worked out from your history.
+@MainActor
+struct Numbers {
+    struct Tile: Identifiable { let id: String; let value: String; var note: String? = nil; var up: Bool? = nil }
+    struct Point: Identifiable { let id: Date; let hours: Double; let average: Double }
+
+    var tiles: [Tile] = []
+    var series: [Point] = []
+    var goalHours = 0.0
+
+    init(store: Store) {
+        let s = StatsData(store: store)
+        let cal = Calendar.current
+        let today0 = cal.startOfDay(for: store.now)
+        func day(_ back: Int) -> Date { cal.date(byAdding: .day, value: -back, to: today0)! }
+        // Oldest first, 37 days so the 7-day average has a run-up.
+        let totals = (0..<37).reversed().map { store.total(on: day($0)) }
+        let last30 = Array(totals.suffix(30))
+        goalHours = store.goal / 3600
+
+        series = (0..<30).map { i in
+            let window = totals[(i + 1)...(i + 7)]
+            return Point(id: day(29 - i), hours: last30[i] / 3600, average: window.reduce(0, +) / 7 / 3600)
+        }
+
+        // 7-day average against the 7 days before it
+        let avg7 = totals.suffix(7).reduce(0, +) / 7
+        let prev7 = totals.suffix(14).prefix(7).reduce(0, +) / 7
+        tiles.append(Tile(id: "7-day average", value: long(avg7), note: Self.change(avg7, prev7).map { "\($0) vs prior 7" },
+                          up: prev7 > 0 ? avg7 >= prev7 : nil))
+
+        let worked = last30.filter { $0 >= 300 }
+        tiles.append(Tile(id: "30-day average", value: long(s.average), note: "over days worked"))
+        let sorted = worked.sorted()
+        let median = sorted.isEmpty ? 0 : sorted.count % 2 == 1 ? sorted[sorted.count / 2]
+                                                                 : (sorted[sorted.count / 2 - 1] + sorted[sorted.count / 2]) / 2
+        tiles.append(Tile(id: "Median day", value: long(median), note: "30 days"))
+
+        // This week (from Monday) against last week up to the same weekday
+        var mon = Calendar(identifier: .iso8601); mon.timeZone = cal.timeZone
+        let into = mon.dateComponents([.weekday], from: today0).weekday.map { ($0 + 5) % 7 } ?? 0   // Mon = 0
+        let thisWeek = (0...into).reduce(0.0) { $0 + store.total(on: day($1)) }
+        let lastWeek = (0...into).reduce(0.0) { $0 + store.total(on: day($1 + 7)) }
+        tiles.append(Tile(id: "This week", value: long(thisWeek),
+                          note: Self.change(thisWeek, lastWeek).map { "\($0) vs last week" } ?? "since Monday",
+                          up: lastWeek > 0 ? thisWeek >= lastWeek : nil))
+
+        let hits = last30.filter { $0 >= store.goal }.count
+        tiles.append(Tile(id: "Goal hit rate", value: "\(Int((Double(hits) / 30 * 100).rounded()))%", note: "\(hits) of 30 days"))
+        tiles.append(Tile(id: "Days worked", value: "\(worked.count)/30", note: "5 minutes or more"))
+
+        tiles.append(Tile(id: "Average session", value: s.sessions > 0 ? long(s.sessionAverage) : "–",
+                          note: s.sessions > 0 ? String(format: "%.1f a day, 7 days", Double(s.sessions) / 7) : "7 days"))
+        tiles.append(Tile(id: "Longest session", value: s.sessions > 0 ? long(s.sessionLongest) : "–", note: "7 days"))
+
+        // Focus ratio: of the time since you started today, how much was focus
+        let first = store.allSegments.first { $0.start >= today0 }?.start
+        if let first, store.now.timeIntervalSince(first) >= 300 {
+            let ratio = min(store.today / store.now.timeIntervalSince(first), 1)
+            tiles.append(Tile(id: "Focus ratio", value: "\(Int((ratio * 100).rounded()))%", note: "since you started today"))
+        } else {
+            tiles.append(Tile(id: "Focus ratio", value: "–", note: "since you started today"))
+        }
+
+        let recent = s.starts.filter { $0.id >= day(6) }.map(\.minute)
+        tiles.append(Tile(id: "Usual start", value: recent.isEmpty ? "–" : Office.text(recent.reduce(0, +) / recent.count),
+                          note: "average, 7 days"))
+        let peak = s.hours.max { $0.minutes < $1.minutes }
+        tiles.append(Tile(id: "Peak hour", value: peak.map { $0.minutes > 0 ? Office.text($0.id * 60).replacingOccurrences(of: ":00", with: "") : "–" } ?? "–",
+                          note: peak.map { $0.minutes > 0 ? "\(Int($0.minutes.rounded()))m on an average day" : "30 days" }))
+        tiles.append(Tile(id: "Blocks · drifts", value: "\(s.blocksWeek) · \(s.driftsWeek)", note: "7 days"))
+    }
+
+    /// "+18%" or "−7%"; nil when there's nothing to compare with.
+    private static func change(_ now: TimeInterval, _ before: TimeInterval) -> String? {
+        guard before >= 60 else { return nil }
+        let pct = Int(((now - before) / before * 100).rounded())
+        return pct >= 0 ? "+\(pct)%" : "−\(-pct)%"
+    }
+}
+
+struct NumbersCard: View {
+    let store: Store
+    var preset: Numbers? = nil
+    @State private var numbers: Numbers?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("The numbers").font(.headline)
+            if let n = numbers ?? preset {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .topLeading), count: 3),
+                          alignment: .leading, spacing: 8) {
+                    ForEach(n.tiles) { t in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(t.id).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            Text(t.value).font(.system(.title3, design: .rounded).weight(.bold)).monospacedDigit().lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                            Text(t.note ?? " ").font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
+                                .foregroundStyle(t.up.map { $0 ? AnyShapeStyle(.green) : AnyShapeStyle(.red) } ?? AnyShapeStyle(.tertiary))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 7).padding(.horizontal, 9)
+                        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(.primary.opacity(0.05)))
+                    }
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("30 days").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Label("7-day average", systemImage: "line.diagonal").font(.caption2).foregroundStyle(.blue)
+                    }
+                    Chart {
+                        ForEach(n.series) { p in
+                            BarMark(x: .value("Day", p.id, unit: .day), y: .value("Hours", p.hours))
+                                .foregroundStyle(p.hours >= n.goalHours ? Color.green.opacity(0.75) : Color.orange.opacity(0.75))
+                        }
+                        ForEach(n.series) { p in
+                            LineMark(x: .value("Day", p.id, unit: .day), y: .value("Average", p.average))
+                                .interpolationMethod(.monotone)
+                                .foregroundStyle(.blue)
+                                .lineStyle(StrokeStyle(lineWidth: 2))
+                        }
+                        RuleMark(y: .value("Goal", n.goalHours))
+                            .foregroundStyle(.secondary).lineStyle(StrokeStyle(lineWidth: 1, dash: [3]))
+                    }
+                    .chartXAxis { AxisMarks(preset: .aligned, values: .stride(by: .day, count: 7)) { _ in
+                        AxisGridLine(); AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                    } }
+                    .chartYAxis { AxisMarks(values: .automatic(desiredCount: 3)) { v in
+                        AxisGridLine(); AxisValueLabel { if let h = v.as(Double.self) { Text("\(h.formatted(.number.precision(.fractionLength(0...1))))h") } }
+                    } }
+                    .frame(height: 96)
+                }
+            }
+        }
+        // Worked out when the panel opens, then every half minute: history doesn't change by the second.
+        .task {
+            while !Task.isCancelled {
+                numbers = Numbers(store: store)
+                try? await Task.sleep(for: .seconds(30))
+            }
+        }
+    }
+}

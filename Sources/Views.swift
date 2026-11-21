@@ -508,10 +508,6 @@ struct WeekPeek: View {
                 Spacer()
                 stat("Streak", "\(store.streak)d")
             }
-            Text("Ranks are a rough estimate from RescueTime focus data and Ericsson's research on elite performers. Right-click for settings.")
-                .fixedSize(horizontal: false, vertical: true)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
         }
         .padding(16)
         .frame(width: 300)
@@ -592,6 +588,8 @@ struct DetailView: View {
     @Bindable var store: Store
     let board: Board
     let updater: Updater
+    /// Snapshots can't wait for the numbers to load, so they pass them in.
+    var preset: Numbers? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -607,16 +605,26 @@ struct DetailView: View {
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: 8).fill(.blue.opacity(0.12)))
             }
-            TodayBar(store: store)
-            OfficeStatus(store: store)
-            FriendsSection(board: board, store: store)
-            CompareCard(store: store)
-            levelBar
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Last 7 days").font(.caption).foregroundStyle(.secondary)
-                WeekBars(store: store, height: 56, showValues: true)
+            // Two columns: today and the race on the left, the numbers on the right.
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 16) {
+                    TodayBar(store: store)
+                    FriendsSection(board: board, store: store)
+                    CompareCard(store: store)
+                    levelBar
+                }
+                .frame(width: 300)
+                Divider()
+                VStack(alignment: .leading, spacing: 16) {
+                    NumbersCard(store: store, preset: preset)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Last 7 days").font(.caption).foregroundStyle(.secondary)
+                        WeekBars(store: store, height: 56, showValues: true)
+                    }
+                    if !store.todaySegmentsByApp.isEmpty || !store.picked.isEmpty { apps }
+                }
+                .frame(width: 350)
             }
-            if !store.todaySegmentsByApp.isEmpty || !store.picked.isEmpty { apps }
             Divider()
             HStack {
                 Text("⌃⌥F to start or stop")
@@ -632,7 +640,7 @@ struct DetailView: View {
             }
         }
         .padding(18)
-        .frame(width: 310)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var header: some View {
