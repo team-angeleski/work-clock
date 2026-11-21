@@ -90,6 +90,28 @@ final class PillHost<Content: View>: NSHostingView<Content> {
     override func mouseExited(with event: NSEvent) { onHover?(false) }
 }
 
+// MARK: Popovers in the clock's own colour
+
+/// The same tint the clock wears, laid over a popover's whole frame (arrow included),
+/// so the panel and the hover card are the same grey as the clock they open from.
+final class PopoverTint: NSView {
+    override var wantsUpdateLayer: Bool { true }
+    override func updateLayer() {
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer?.backgroundColor = (dark ? NSColor.black : NSColor.white).withAlphaComponent(0.62).cgColor
+    }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    static func apply(to popover: NSPopover) {
+        guard let frame = popover.contentViewController?.view.window?.contentView?.superview,
+              !frame.subviews.contains(where: { $0 is PopoverTint }) else { return }
+        let tint = PopoverTint(frame: frame.bounds)
+        tint.wantsLayer = true
+        tint.autoresizingMask = [.width, .height]
+        frame.addSubview(tint, positioned: .below, relativeTo: frame.subviews.first)
+    }
+}
+
 // MARK: App
 
 @MainActor
@@ -439,6 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             guard let self, !Task.isCancelled, !self.details.isShown, !self.store.pressed, !self.peekBlocked else { return }
             self.peek.contentViewController = NSHostingController(rootView: WeekPeek(store: self.store, board: self.board))
             self.peek.show(relativeTo: self.host.bounds, of: self.host, preferredEdge: .maxY)
+            PopoverTint.apply(to: self.peek)
             self.watchPeek()
         }
     }
@@ -468,6 +491,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         board.nudge()   // fresh race numbers when you look
         details.contentViewController = NSHostingController(rootView: DetailView(store: store, board: board, updater: updater))
         details.show(relativeTo: host.bounds, of: host, preferredEdge: .maxY)
+        PopoverTint.apply(to: details)
     }
 }
 
