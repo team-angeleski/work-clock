@@ -103,10 +103,16 @@ final class Store {
     @ObservationIgnored weak var board: Board?
 
     /// Friends' pranks and board events surface here.
-    func announce(_ text: String, sound: String?, seconds: Double = 4) {
+    enum Tone { case good, info, warning }
+    /// Set by the app: shows a banner above the clock. Without it, the text falls back to the clock itself.
+    @ObservationIgnored var onBanner: ((String, Tone, String?, Double) -> Void)?
+
+    /// Something worth reading: a banner above the clock, big enough to read at a glance.
+    func announce(_ text: String, sound: String?, seconds: Double = 4, tone: Tone? = nil, icon: String? = nil) {
         if let sound { NSSound(named: sound)?.play() }
         levelUpTick += 1
-        show(text, seconds: seconds)
+        let tone = tone ?? (["Basso", "Funk"].contains(sound ?? "") ? .warning : sound == nil ? .info : .good)
+        if let onBanner { onBanner(text, tone, icon, max(seconds, 5)) } else { show(text, seconds: seconds) }
     }
 
     // Settings

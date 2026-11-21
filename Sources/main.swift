@@ -188,6 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         timer.tolerance = 1
         RunLoop.main.add(timer, forMode: .common)
+        store.onBanner = { [weak self] text, tone, icon, seconds in self?.showBanner(text, tone, icon, seconds) }
         hotKey = HotKey { [weak self] in self?.store.quickToggle() }
         board.onShowTaunt = { [weak self] taunt in self?.showTaunt(taunt) }
         Notify.ask()
@@ -221,8 +222,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 }
                 snap(DetailView(store: self.store, board: self.board, updater: self.updater), "panel")
                 snap(StatsView(store: self.store, scrolls: false).frame(width: 680), "stats")
+                snap(WeekPeek(store: self.store, board: self.board), "hover")
                 snap(QuitCodeView(code: "ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567-89ABC-DEFGH") {}, "quitcode")
                 snap(QuitPromptView(quit: {}, cancel: {}), "quitprompt")
+                snap(VStack(spacing: 0) {
+                    BannerView(text: "Instagram closed. 1h 56m more focus unlocks it.", tone: .warning, icon: "lock.fill")
+                    BannerView(text: "In at 9:07 · you were 7m late", tone: .info)
+                    BannerView(text: "You took the lead!", tone: .good)
+                }, "banners")
+                for scheme in [ColorScheme.dark, .light] {
+                    snap(PillView(store: self.store, board: self.board).frame(width: 70 * Self.pillAspect, height: 70)
+                        .background(scheme == .dark ? Color(white: 0.25) : Color(white: 0.8))
+                        .environment(\.colorScheme, scheme), "pill-\(scheme == .dark ? "dark" : "light")")
+                }
                 for step in SetupView.Step.allCases {
                     snap(SetupView(store: self.store, board: self.board, emailOnly: false, startAt: step) {}, "setup-\(step)")
                 }
@@ -277,17 +289,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func applicationWillTerminate(_ note: Notification) { store.save() }
 
+    /// Wide enough that the line under the time is never cut off.
+    private static let pillAspect: CGFloat = 2.7
+
     private func reposition() {
         let target: CGRect
         if let d = Dock.frame() {
             guard NSScreen.screens.contains(where: { $0.frame.intersects(d) }) else { panel.orderOut(nil); return }
             // The Dock's accessibility frame sits a few points above its visible glass.
             let h = d.height
-            target = CGRect(x: d.maxX + 6, y: d.minY - 4, width: (h * 2.1).rounded(), height: h)
+            target = CGRect(x: d.maxX + 6, y: d.minY - 4, width: (h * Self.pillAspect).rounded(), height: h)
         } else if let screen = NSScreen.main {
             // No Accessibility yet: sit bottom-right at Dock height.
             let dockH = max(screen.visibleFrame.minY - screen.frame.minY - 8, 56)
-            let w = (dockH * 2.1).rounded()
+            let w = (dockH * Self.pillAspect).rounded()
             target = CGRect(x: screen.frame.maxX - w - 12, y: screen.frame.minY + 4, width: w, height: dockH)
         } else { return }
         if panel.frame != target {
@@ -353,7 +368,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         p.alphaValue = 0
         p.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { $0.duration = 0.3; p.animator().alphaValue = 1 }
-        store.announce("Taunted!", sound: nil, seconds: 6)
+    }
+
+    /// A banner slides up above the clock, stays a few seconds, then fades.
+    private var bannerPanel: NSPanel?
+    private var bannerTask: Task<Void, Never>?
+    private func showBanner(_ text: String, _ tone: Store.Tone, _ icon: String?, _ seconds: Double) {
+        let view = NSHostingView(rootView: BannerView(text: text, tone: tone, icon: icon))
+        view.sizingOptions = []          // the panel's size is set here, not by the hosting view
+        let size = NSHostingController(rootView: BannerView(text: text, tone: tone, icon: icon))
+            .sizeThatFits(in: CGSize(width: 600, height: 400))
+        let p = bannerPanel ?? {
+            let p = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            p.level = .statusBar
+            p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+            p.isOpaque = false
+            p.backgroundColor = .clear
+            p.hasShadow = false
+            p.hidesOnDeactivate = false
+            p.ignoresMouseEvents = true
+            return p
+        }()
+        bannerPanel = p
+        p.contentView = view
+        let pill = panel.frame
+        var x = pill.midX - size.width / 2
+        if let screen = NSScreen.screens.first(where: { $0.frame.intersects(pill) }) ?? NSScreen.main {
+            x = min(max(x, screen.frame.minX + 4), screen.frame.maxX - size.width - 4)
+        }
+        // Sit above a taunt if one is up.
+        let base = (tauntPanel?.isVisible ?? false) ? (tauntPanel?.frame.maxY ?? pill.maxY) - 24 : pill.maxY - 12
+        let rest = CGRect(x: x, y: base, width: size.width, height: size.height)
+        let fresh = !p.isVisible || p.alphaValue == 0
+        if fresh {
+            p.setFrame(rest.offsetBy(dx: 0, dy: -14), display: true)
+            p.alphaValue = 0
+            p.orderFrontRegardless()
+        }
+        NSAnimationContext.runAnimationGroup {
+            $0.duration = 0.3
+            $0.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            p.animator().setFrame(rest, display: true)
+            p.animator().alphaValue = 1
+        }
+        bannerTask?.cancel()
+        bannerTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled, let p = self?.bannerPanel else { return }
+            NSAnimationContext.runAnimationGroup({ $0.duration = 0.35; p.animator().alphaValue = 0 },
+                                                 completionHandler: { if p.alphaValue == 0 { p.orderOut(nil) } })
+        }
     }
 
     /// The Dock animates when icons are added or removed: follow it for a moment.

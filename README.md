@@ -42,7 +42,7 @@ Needs Windows 10 or 11 (64-bit). Already have an account on your Mac? Choose **I
 
 ## Mornings
 
-- **The block:** YouTube and Instagram close on sight until 1pm, or until you've done 2 hours of focus that day. Every day, no setting.
+- **The block:** YouTube and Instagram close on sight until you've done 2 hours of focus that day, whatever the time, and always while the clock is running. Every day, no setting.
 - **Office hours, as a counter:** pick a time to aim for. Starting the clock clocks you in, and the late counter stops right there ("In at 9:07 · you were 7m late"). No points lost, nobody gets emailed.
 - **Picking a browser** counts every site in it except the distraction sites.
 
@@ -69,7 +69,7 @@ Your email is part of your account (required to join). You get an email when a f
 Small pushes back to work, all as Mac notifications plus a shake of the clock:
 
 - **Drifting:** on a distraction site mid-session, the clock shakes at 20s and 60s and notifies you at 2 minutes. In any other non-work app: a shake at 90s, a notification at 5 minutes. Idle time never nags.
-- **Mornings:** YouTube and Instagram close on sight until 1pm or 2 hours of focus.
+- **Mornings:** YouTube and Instagram close on sight until 2 hours of focus, and while the clock runs.
 - **Not started:** at your Mac for 15 minutes without starting, you get your rank and the race. Again at 90 minutes.
 - **Friends:** a notification within seconds when a friend starts working (once per 20 minutes per friend), when someone overtakes you, and when you take the lead. Taunts pop up straight away.
 - **Streak at risk:** at 8pm, if your goal isn't hit and you have a streak going.

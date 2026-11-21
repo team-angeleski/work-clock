@@ -32,9 +32,8 @@ enum Browser {
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
-    /// Closed on sight until 1pm, or until 2 hours of focus today.
+    /// Closed on sight until 2 hours of focus today, and always while the clock is running.
     static let morningBlock = ["instagram.com", "youtube.com"]
-    static let blockUntilHour = 13
     static let blockUntilFocus: TimeInterval = 2 * 3600
 
     static func isBlocked(_ domain: String) -> Bool {

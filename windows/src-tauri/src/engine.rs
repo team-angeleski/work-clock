@@ -22,9 +22,8 @@ const SPREAD: f64 = 0.6;
 pub const DISTRACTIONS: [&str; 9] = ["youtube.com", "tiktok.com", "instagram.com", "facebook.com", "x.com",
     "twitter.com", "reddit.com", "netflix.com", "twitch.tv"];
 
-/// Closed on sight until 1pm, or until 2 hours of focus today.
+/// Closed on sight until 2 hours of focus today, and always while the clock is running.
 pub const MORNING_BLOCK: [&str; 2] = ["instagram.com", "youtube.com"];
-pub const BLOCK_UNTIL_HOUR: u32 = 13;
 pub const BLOCK_UNTIL_FOCUS: f64 = 2.0 * 3600.0;
 
 pub fn is_blocked(domain: &str) -> bool {

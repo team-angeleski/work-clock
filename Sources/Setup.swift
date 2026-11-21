@@ -199,7 +199,7 @@ struct SetupView: View {
                 feature("cursorarrow.click.2", .blue, "Pick, then focus", "Click the clock, click the apps you work in, then click it again to start.")
                 feature("eye.fill", .orange, "Only real work counts", "Drift to YouTube and it stops, and gives you a nudge back.")
                 feature("trophy.fill", .yellow, "Race your friends", "Win the day and you get three taunts that pop up on their screens.")
-                feature("lock.fill", .indigo, "Mornings without the scroll", "YouTube and Instagram stay closed until 1pm, or until you've done 2 hours.")
+                feature("lock.fill", .indigo, "No scrolling first", "YouTube and Instagram stay closed until you've done 2 hours of focus, and while the clock runs.")
             }
         }
     }
@@ -649,7 +649,7 @@ struct SettingsView: View {
                 row("clock", "1 point per focused minute")
                 row("sunrise.fill", "Before 9am, minutes count 1.5×")
                 row("leaf.fill", "No socials before 1pm + an hour of focus: +30")
-                row("lock.fill", "YouTube and Instagram close until 1pm, or until 2 hours of focus")
+                row("lock.fill", "YouTube and Instagram close until 2 hours of focus, and while the clock runs")
             }
             Section("Winning") {
                 row("crown.fill", Costume.enabled ? "Top score wins the day: 3 taunts, and you unlock a legend to play as the next day"

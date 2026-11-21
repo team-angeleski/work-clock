@@ -171,7 +171,7 @@ struct StatsView: View {
                     .chartForegroundStyleScale(["YouTube": Color.red, "Instagram": Color.purple])
                     .frame(height: 110)
                     }
-                    Text("Each one is a time you reached for it before 1pm or before 2 hours of focus.")
+                    Text("Each one is a time you reached for it before 2 hours of focus, or mid-session.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 

@@ -87,12 +87,12 @@ final class Coach {
         }
     }
 
-    /// Instagram and YouTube are closed on sight until 1pm, or until 2 hours of focus today.
-    /// Every day, no setting: a flat block beats willpower.
+    /// Instagram and YouTube are closed on sight until 2 hours of focus today, whatever the time,
+    /// and always while the clock is running. No setting: a flat block beats willpower.
     private var lastLockCheck = Date.distantPast
     private func lockDistractions(_ store: Store, _ now: Date) {
-        let hour = Calendar.current.component(.hour, from: now)
-        guard hour >= 4, hour < Browser.blockUntilHour, store.today < Browser.blockUntilFocus,
+        let earned = store.today >= Browser.blockUntilFocus
+        guard !earned || store.mode == .running,
               now.timeIntervalSince(lastLockCheck) >= 2,
               let app = NSWorkspace.shared.frontmostApplication, let id = app.bundleIdentifier,
               Browser.isBrowser(id) else { return }
@@ -101,8 +101,9 @@ final class Coach {
         TabCloser.closeFrontTab(of: app)
         store.mark(.block, domain.contains("youtube") ? "youtube.com" : "instagram.com")
         let site = domain.contains("youtube") ? "YouTube" : "Instagram"
-        let left = long(Browser.blockUntilFocus - store.today)
-        store.announce("\(site)'s blocked till 1pm · or \(left) more focus 🔒", sound: "Basso", seconds: 5)
+        store.announce(earned ? "\(site) closed. It's open again when you stop the clock."
+                              : "\(site) closed. \(long(Browser.blockUntilFocus - store.today)) more focus unlocks it.",
+                       sound: "Basso", seconds: 6, tone: .warning, icon: "lock.fill")
     }
 
     // MARK: 5. Streak about to break

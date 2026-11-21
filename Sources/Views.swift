@@ -35,29 +35,29 @@ struct PillView: View {
                 VStack(alignment: .center, spacing: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(title)
-                            .font(.system(size: h * 0.29, weight: .semibold, design: .rounded))
+                            .font(.system(size: h * 0.33, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .foregroundStyle(titleStyle)
                         if board.leading {
                             Image(systemName: "crown.fill")
-                                .font(.system(size: h * 0.15, weight: .bold))
+                                .font(.system(size: h * 0.17, weight: .bold))
                                 .foregroundStyle(.yellow)
                         }
                         if store.multiplier > 1 {
                             Text("×\(Int(store.multiplier))")
-                                .font(.system(size: h * 0.16, weight: .heavy, design: .rounded))
+                                .font(.system(size: h * 0.19, weight: .heavy, design: .rounded))
                                 .foregroundStyle(.orange)
                                 .transition(.scale.combined(with: .opacity))
                         }
                     }
                     Text(subtitle)
-                        .font(.system(size: h * 0.165, weight: .medium))
+                        .font(.system(size: h * 0.2, weight: .semibold, design: .rounded))
                         .foregroundStyle(subtitleStyle)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.8)
+                        .contentTransition(.opacity)
                 }
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
                 // Fixed-width, centred column: changing text never moves the buddy,
                 // and the whole block stays balanced in the pill.
                 .frame(width: geo.size.width - h * 0.52 - h * 0.16 - h * 0.36, alignment: .center)
@@ -81,7 +81,8 @@ struct PillView: View {
     }
 
     private var fill: Color {
-        let base = scheme == .dark ? Color.black.opacity(0.42) : Color.white.opacity(0.25)
+        // Dark enough (or light enough) behind the text that it reads over any wallpaper.
+        let base = scheme == .dark ? Color.black.opacity(0.62) : Color.white.opacity(0.62)
         return store.pressed ? (scheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)) : base
     }
 
@@ -105,7 +106,7 @@ struct PillView: View {
     }
 
     private var titleStyle: AnyShapeStyle {
-        store.mode == .running && store.onTask || store.mode == .picking ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
+        store.mode == .running && store.onTask || store.mode == .picking ? AnyShapeStyle(.primary) : AnyShapeStyle(.primary.opacity(0.7))
     }
 
     private var subtitle: String {
@@ -123,7 +124,7 @@ struct PillView: View {
             if !store.pickingSet.isEmpty { return "Tap to start" }
             return store.picked.isEmpty ? "Click your apps" : "Pick, or tap for same"
         case .running:
-            if !store.onTask { return store.offReason.map { "Off task · \($0)" } ?? "Off task" }
+            if !store.onTask { return store.offReason.map { "Off · \($0)" } ?? "Off task" }
             // Take turns every 4s: the next goal, the race, then flow or early bird.
             var lines: [String] = goalLines
             if let race = board.raceLine { lines.append(race) }
@@ -136,7 +137,7 @@ struct PillView: View {
     private var goalLines: [String] {
         var out: [String] = []
         if let next = store.nextTier, next.needed > 0 { out.append("\(long(next.needed)) to \(next.name)") }
-        if !store.goalMet { out.append("\(long(store.goal - store.today)) to your \(long(store.goal)) goal") }
+        if !store.goalMet { out.append("\(long(store.goal - store.today)) to goal") }
         return out
     }
 
@@ -150,11 +151,12 @@ struct PillView: View {
     }
 
     private var subtitleStyle: AnyShapeStyle {
-        if store.flash != nil { return AnyShapeStyle(.orange) }
-        if store.mode == .idle && !store.clockedIn && store.lateNow > 0 { return AnyShapeStyle(.red) }
-        if store.mode == .idle && store.todayPercentile < 40 { return AnyShapeStyle(.red.opacity(0.85)) }
-        if store.mode == .running && !store.onTask { return AnyShapeStyle(.red.opacity(0.9)) }
-        return AnyShapeStyle(.secondary)
+        // Solid colours, never the faint system greys: this text is small and sits over the desktop.
+        let warn = scheme == .dark ? Color(red: 1, green: 0.45, blue: 0.4) : Color(red: 0.8, green: 0.1, blue: 0.1)
+        if store.flash != nil { return AnyShapeStyle(scheme == .dark ? Color.orange : Color(red: 0.75, green: 0.35, blue: 0)) }
+        if store.mode == .idle && !store.clockedIn && store.lateNow > 0 { return AnyShapeStyle(warn) }
+        if store.mode == .running && !store.onTask { return AnyShapeStyle(warn) }
+        return AnyShapeStyle(.primary.opacity(0.78))
     }
 }
 
@@ -927,6 +929,44 @@ struct TauntBubble: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.yellow.opacity(0.5), lineWidth: 1.5))
         .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
         .padding(20)
+    }
+}
+
+/// Anything the clock has to tell you: big, solid and above the clock, so it can be read at a glance.
+struct BannerView: View {
+    let text: String
+    let tone: Store.Tone
+    var icon: String?
+
+    /// As wide as the words need, up to 320: an exact width keeps the window's size honest.
+    private var textWidth: CGFloat {
+        let w = (text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 17, weight: .semibold)]).width
+        return min(ceil(w * 1.04) + 4, 320)
+    }
+    private var tint: Color { tone == .warning ? .red : tone == .good ? .green : .orange }
+    private var symbol: String {
+        icon ?? (tone == .warning ? "exclamationmark.triangle.fill" : tone == .good ? "checkmark.circle.fill" : "bell.fill")
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(tint.gradient))
+            Text(text)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: textWidth, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 14).padding(.leading, 14).padding(.trailing, 20)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(white: 0.11)))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(tint.opacity(0.7), lineWidth: 1.5))
+        .shadow(color: .black.opacity(0.4), radius: 18, y: 6)
+        .padding(22)
+        .fixedSize()
     }
 }
 

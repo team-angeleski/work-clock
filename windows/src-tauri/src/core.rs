@@ -315,17 +315,19 @@ impl Core {
         }
     }
 
-    /// Instagram and YouTube are closed on sight until 1pm, or until 2 hours of focus today.
-    /// Every day, no setting. (Coach.swift)
+    /// Instagram and YouTube are closed on sight until 2 hours of focus today, whatever the time,
+    /// and always while the clock is running. No setting. (Coach.swift)
     fn lock_distractions(&mut self, t: f64, domain: Option<String>) -> bool {
         let today = self.engine.today();
-        if clock::hour(t) < 4 || clock::hour(t) >= engine::BLOCK_UNTIL_HOUR || today >= engine::BLOCK_UNTIL_FOCUS
-            || t - self.last_lock_check < 2.0 { return false; }
+        let earned = today >= engine::BLOCK_UNTIL_FOCUS;
+        if (earned && self.engine.mode != Mode::Running) || t - self.last_lock_check < 2.0 { return false; }
         let Some(d) = domain else { return false };
         self.last_lock_check = t;
         if !engine::is_blocked(&d) { return false; }
         let site = if d.contains("youtube") { "YouTube" } else { "Instagram" };
-        self.engine.announce(&format!("{site}'s blocked till 1pm · or {} more focus 🔒", long(engine::BLOCK_UNTIL_FOCUS - today)), Some("basso"), 5.0);
+        let text = if earned { format!("{site} closed · open again when you stop") }
+                   else { format!("{site} closed · {} more focus unlocks it", long(engine::BLOCK_UNTIL_FOCUS - today)) };
+        self.engine.announce(&text, Some("basso"), 6.0);
         true
     }
 
@@ -447,7 +449,7 @@ impl Core {
                 let mut lines: Vec<String> = vec![];
                 if let Some((name, need)) = self.engine.next_tier() { if need > 0.0 { lines.push(format!("{} to {name}", long(need))); } }
                 let (today, goal) = (self.engine.today(), self.engine.goal());
-                if today < goal { lines.push(format!("{} to your {} goal", long(goal - today), long(goal))); }
+                if today < goal { lines.push(format!("{} to goal", long(goal - today))); }
                 if let Some(r) = self.race_line() { lines.push(r); }
                 let c = self.engine.combo_minutes();
                 lines.push(if self.engine.early_bird() { "Early bird ×1.5".into() } else if c > 0 { format!("In flow {c}m") } else { "Focusing".into() });
