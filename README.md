@@ -62,7 +62,7 @@ Settings → Account → **Sign Out** stops counting that one computer; **Delete
 
 ## Email alerts
 
-Your email is part of your account (required to join). You get an email when a friend passes you and when you're taunted. Sent by the database (pg_cron + pg_net) through Resend.
+Your email is part of your account (required to join). Each morning you get yesterday's result: every score and who won. You also get an email when you're taunted. Nothing about today's race is emailed, since it's sealed. Sent by the database (pg_cron + pg_net) through Resend.
 
 ## The coach
 
@@ -90,4 +90,4 @@ Darnell Jr. checks for a new release every hour and installs it by itself as soo
 
 `windows/build.sh` builds the Windows installer (`build/WorkClock-Setup.exe`) on a Mac; see [windows/README.md](windows/README.md).
 
-`server/focusboard.sql`, `server/office_hours.sql`, `server/email_required.sql` and `server/devices.sql` are the board's database, in order. `tools/set-mail-key.sh` copies the Resend key into Supabase Vault so emails can send. `server/anon.key` (not committed) holds the public Supabase key.
+`server/focusboard.sql`, `server/office_hours.sql`, `server/email_required.sql` and `server/devices.sql` are the board's database, in order; `server/result_email.sql` adds the morning result email. `tools/set-mail-key.sh` copies the Resend key into Supabase Vault so emails can send. `server/anon.key` (not committed) holds the public Supabase key.
