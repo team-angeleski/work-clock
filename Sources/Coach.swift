@@ -164,7 +164,7 @@ final class Coach {
             store.announce("Tap to start", sound: "Funk", seconds: 6)
             onShake?()
         } else if waited >= 90 * 60, once("nudge2") {
-            let friendsLine = board?.others.filter { $0.today > 0 }.map { "\($0.name) is on \(long(Double($0.score)))" }.first
+            let friendsLine = board?.raceLine
             Notify.post("Still nothing on the clock", (friendsLine.map { "\($0). " } ?? "") + "Pick one thing and give it 25 minutes.", id: "start")
             onShake?()
         }
@@ -174,12 +174,7 @@ final class Coach {
 
     func boardSynced() {
         guard let board, let store else { return }
-        // A friend blew their clock-in: rub it in.
-        for f in board.others where f.due_min != nil && f.in_min == nil && (f.late ?? 0) >= 15 {
-            guard once("friendlate-\(f.id)") else { continue }
-            Notify.post("\(f.name) hasn't clocked in", "\(f.late ?? 15) minutes late and losing a point a minute. Get ahead.", id: "friendlate-\(f.id)")
-        }
-        _ = store   // "friend started" alerts now come instantly from Board.friendStarted
+                _ = store   // "friend started" alerts now come instantly from Board.friendStarted
     }
 
     // MARK: 4. End-of-day recap at 9pm
@@ -189,8 +184,7 @@ final class Coach {
         let p = store.todayPercentile
         var body = "\(long(store.today)) focused · \(Store.rank(p)) (\(Store.tier(p)))."
         if let board, !board.others.isEmpty {
-            body += board.leading ? " You're beating everyone. Win the day, earn 3 taunts."
-                                  : (board.raceLine.map { " \($0) before midnight." } ?? "")
+            body += " The race is sealed until tomorrow\(board.raceLine.map { ", and \($0) right now" } ?? "")."
         }
         body += " Tomorrow's goal: \(long(store.adaptiveGoalTomorrow))."
         if let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now) {

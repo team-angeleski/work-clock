@@ -74,7 +74,7 @@ impl Core {
         server.max(self.engine.today_score() as i64)   // being late is shown, never taken off
     }
 
-    /// The race with my own row using my live numbers (the server's copy lags a few minutes).
+    /// Everyone on the board, me first and then by name: an order that gives nothing away.
     pub fn ranked(&mut self) -> Vec<Friend> {
         let score = self.my_score();
         let late = self.my_late();
@@ -87,17 +87,12 @@ impl Core {
             if member.as_ref().map(|m| f.id.eq_ignore_ascii_case(m)) != Some(true) { return self.board.live(f); }
             Friend { level, streak, focusing, today: f.today.max(today), score, week: f.week - f.score + score, late: Some(late), ..f.clone() }
         }).collect();
-        v.sort_by(|a, b| b.score.cmp(&a.score).then(a.name.cmp(&b.name)));
+        let mine = |f: &Friend| member.as_ref().map(|m| f.id.eq_ignore_ascii_case(m)) == Some(true);
+        v.sort_by(|a, b| mine(b).cmp(&mine(a)).then(a.name.cmp(&b.name)));
         v
     }
 
-    pub fn race_line(&mut self) -> Option<String> {
-        let mine = self.my_score();
-        let rate = self.engine.score_rate();
-        self.board.race_line(&self.settings.member, mine, rate)
-    }
-
-    pub fn leading(&mut self) -> bool { let s = self.my_score(); self.board.leading(&self.settings.member, s) }
+    pub fn race_line(&mut self) -> Option<String> { self.board.race_line(&self.settings.member) }
 
     // MARK: Sync
 
@@ -146,7 +141,6 @@ impl Core {
                 self.board.schedule(s.incoming);
                 self.board_synced();
                 self.announce_day();
-                self.announce_lead_change();
             }
             Err(api::ApiError::Server(t)) if t == "Not a member of this board" => {
                 self.forget();
@@ -186,33 +180,21 @@ impl Core {
         if champs.is_empty() { return; }
         self.settings.announced_day = Some(today);
         self.save_settings();
+        // The reveal: yesterday's sealed scores, out in the open.
+        let me_y = self.board.me(&self.settings.member).map(|f| f.yesterday).unwrap_or(0);
+        let mut result: Vec<Friend> = self.board.friends.clone();
+        result.sort_by(|a, b| b.yesterday.cmp(&a.yesterday).then(a.name.cmp(&b.name)));
         if champs.contains(&mine.to_lowercase()) {
             let n = self.board.taunts_left;
-            self.engine.announce(&format!("You won yesterday! {n} taunts ready"), Some("hero"), 6.0);
-            self.notify("You won yesterday 👑", &format!("You've got {n} taunts to send. Open your clock's panel."));
-        } else if let Some(w) = self.board.friends.iter().find(|f| champs.contains(&f.id.to_lowercase())).map(|f| f.name.clone()) {
-            self.engine.announce(&format!("{w} won yesterday. Brace yourself."), Some("funk"), 6.0);
-            self.notify(&format!("{w} won yesterday"), "Taunts incoming. Win today to get your revenge.");
+            let versus = result.iter().find(|f| !f.id.eq_ignore_ascii_case(&mine))
+                .map(|f| format!("{} to {}'s {}.", long(me_y as f64), crate::board::short(&f.name), long(f.yesterday as f64))).unwrap_or_default();
+            self.engine.announce(&format!("You won yesterday! {versus} {n} taunts ready"), Some("hero"), 10.0);
+            self.notify("You won yesterday 👑", &format!("{versus} You've got {n} taunts to send. Open your clock's panel."));
+        } else if let Some(w) = result.first().cloned() {
+            let versus = format!("{} to your {}", long(w.yesterday as f64), long(me_y as f64));
+            self.engine.announce(&format!("{} won yesterday: {versus}", crate::board::short(&w.name)), Some("funk"), 10.0);
+            self.notify(&format!("{} won yesterday", w.name), &format!("{versus}. Taunts incoming. Today's scores are sealed, so it's anyone's."));
         }
-    }
-
-    fn announce_lead_change(&mut self) {
-        if self.board.others(&self.settings.member).is_empty() || self.engine.today() <= 300.0 { return; }
-        let now_lead = self.leading();
-        if let Some(before) = self.board.last_lead {
-            if before != now_lead {
-                let race = self.race_line();
-                if now_lead {
-                    self.engine.announce("You took the lead!", Some("glass"), 4.0);
-                    self.notify("You took the lead 👑", race.as_deref().unwrap_or("Keep going"));
-                } else if let Some(top) = self.board.others(&self.settings.member).into_iter().max_by_key(|f| f.score).map(|f| f.name.clone()) {
-                    self.engine.announce(&format!("{top} overtook you"), Some("basso"), 4.0);
-                    let body = race.map(|r| format!("{r}. Get back to it.")).unwrap_or_else(|| "Get back to it.".into());
-                    self.notify(&format!("{top} overtook you"), &body);
-                }
-            }
-        }
-        self.board.last_lead = Some(now_lead);
     }
 
     // MARK: Taunts popping up
@@ -260,16 +242,15 @@ impl Core {
     }
 
     /// A friend just started working: tell me straight away, then sync for fresh race numbers.
-    fn friend_started(&mut self, name: &str, today: i64) {
-        let theirs = long(today as f64);
-        let mine = long(self.engine.today());
+    fn friend_started(&mut self, name: &str, _today: i64) {
+        // No times: today's scores are sealed until tomorrow.
         let short = crate::board::short(name);
         if self.engine.mode == Mode::Running {
-            self.notify(&format!("{name} started too"), &format!("They're on {theirs} today. You're on {mine}. Keep going."));
+            self.notify(&format!("{name} started too"), "You're both on the clock. Scores are sealed until tomorrow. Keep going.");
             self.engine.announce(&format!("{short} started too"), Some("pop"), 5.0);
         } else {
-            self.notify(&format!("{name} just started working"), &format!("They're on {theirs} today. You're on {mine}. Your move."));
-            self.engine.announce(&format!("{short} started. Your move"), Some("funk"), 6.0);
+            self.notify(&format!("{name} just started working"), "They're on the clock and you're not. Scores are sealed until tomorrow. Your move.");
+            self.engine.announce(&format!("{short} is on the clock. Your move"), Some("funk"), 6.0);
         }
         self.engine.events.push(Event::Nudge);
     }
@@ -380,8 +361,7 @@ impl Core {
             self.engine.announce("Tap to start", Some("funk"), 6.0);
             self.shake();
         } else if waited >= 5400.0 && self.once("nudge2") {
-            let line = self.board.others(&self.settings.member).into_iter().find(|f| f.today > 0)
-                .map(|f| format!("{} is on {}. ", f.name, long(f.score as f64))).unwrap_or_default();
+            let line = self.race_line().map(|r| format!("{r}. ")).unwrap_or_default();
             self.notify("Still nothing on the clock", &format!("{line}Pick one thing and give it 25 minutes."));
             self.shake();
         }
@@ -390,12 +370,6 @@ impl Core {
     /// After each board sync: friends blowing their clock-in. (Friends starting come through the inbox.)
     fn board_synced(&mut self) {
         self.engine.clocked_in_elsewhere = self.board.me(&self.settings.member).map(|m| m.in_min.is_some()).unwrap_or(false);
-        let others: Vec<Friend> = self.board.others(&self.settings.member);
-        for f in others.iter().filter(|f| f.due_min.is_some() && f.in_min.is_none() && f.late.unwrap_or(0) >= 15) {
-            if !self.once(&format!("friendlate-{}", f.id)) { continue; }
-            self.notify(&format!("{} hasn't clocked in", f.name),
-                        &format!("{} minutes late and losing a point a minute. Get ahead.", f.late.unwrap_or(15)));
-        }
     }
 
     fn recap(&mut self, t: f64) {
@@ -403,8 +377,7 @@ impl Core {
         let p = self.engine.today_percentile();
         let mut body = format!("{} focused · {} ({}).", long(self.engine.today()), engine::rank(p), engine::tier(p));
         if self.on_board_with_friends() {
-            if self.leading() { body += " You're beating everyone. Win the day, earn 3 taunts."; }
-            else if let Some(r) = self.race_line() { body += &format!(" {r} before midnight."); }
+            body += " The race is sealed until tomorrow.";
         }
         body += &format!(" Tomorrow's goal: {}.", long(self.engine.adaptive_goal_tomorrow()));
         self.engine.office.promote();
@@ -461,7 +434,7 @@ impl Core {
     pub fn snapshot(&mut self, icons: &HashMap<String, String>) -> Value {
         let e_now = self.engine.now;
         let subtitle = self.subtitle();
-        let leading = self.leading();
+        let leading = self.board.won_yesterday(&self.settings.member);   // the crown: yesterday's winner
         let race = self.race_line();
         let ranked = self.ranked();
         let champs = self.board.champions();
@@ -479,14 +452,15 @@ impl Core {
         let shown: Vec<Value> = self.engine.shown_apps().iter().map(|k| app(k, &self.engine)).collect();
         let by_app: Vec<Value> = self.engine.today_by_app().into_iter().take(6)
             .map(|(k, t)| json!({"name": self.engine.name(&k), "time": long(t), "icon": icons.get(engine::split(&k).0)})).collect();
-        let friends: Vec<Value> = ranked.iter().map(|f| json!({
+        // Blind race: a friend's time today never reaches the screen. Yesterday's is the reveal.
+        let friends: Vec<Value> = ranked.iter().map(|f| { let me = f.id.to_lowercase() == member; json!({
             "id": f.id, "name": f.name, "level": f.level, "streak": f.streak, "focusing": f.focusing,
-            "today": long(f.today as f64), "score": f.score, "scoreText": long(f.score as f64), "week": long(f.week as f64),
-            "me": f.id.to_lowercase() == member, "champion": champs.contains(&f.id.to_lowercase()),
-            "late": f.late.unwrap_or(0), "due": f.due_min.map(Office::text), "in": f.in_min.map(Office::text),
+            "scoreText": if me { long(f.score as f64) } else { String::new() },
+            "yesterday": f.yesterday, "yesterdayText": long(f.yesterday as f64),
+            "me": me, "champion": champs.contains(&f.id.to_lowercase()),
             "tauntedToday": f.taunted_today,
             "character": f.character, "characterName": f.character_name,
-        })).collect();
+        }) }).collect();
         let my_character = self.board.me(&self.settings.member).and_then(|m| m.character.clone());
         let my_character_name = self.board.me(&self.settings.member).and_then(|m| m.character_name.clone());
         let next_tier = self.engine.next_tier().map(|(n, t)| json!({"name": n, "needed": long(t)}));

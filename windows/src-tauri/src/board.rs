@@ -1,4 +1,5 @@
 //! The friend board: up to 5 friends ranked by focus score. Yesterday's winner gets 3 taunts.
+//! The race is blind: today's times stay sealed, and the result is revealed the next day.
 //! State and race maths from Board.swift; the network calls are in api.rs.
 
 use crate::api::{Friend, Taunt};
@@ -64,7 +65,6 @@ pub struct Board {
     /// Taunts waiting to pop up, with when.
     pub pending: Vec<(f64, Taunt)>,
     pub next_show_at: f64,
-    pub last_lead: Option<bool>,
     /// I won yesterday, so I get to pick today's character.
     pub can_pick: bool,
     pub unlocked: Vec<String>,
@@ -76,11 +76,6 @@ pub struct Board {
 pub fn short(name: &str) -> String {
     let first = name.split(' ').next().unwrap_or(name);
     if first.chars().count() > 9 { format!("{}…", first.chars().take(8).collect::<String>()) } else { first.to_string() }
-}
-
-pub fn minutes(seconds: f64) -> String {
-    let m = ((seconds / 60.0).ceil() as i64).max(1);
-    if m >= 60 { format!("{}h {}m", m / 60, m % 60) } else { format!("{m}m") }
 }
 
 impl Board {
@@ -113,24 +108,19 @@ impl Board {
         self.friends.iter().filter(|f| f.yesterday == best).map(|f| f.id.to_lowercase()).collect()
     }
 
-    /// "15m to beat Cung", "Leading Cung by 20m", or None when alone.
-    pub fn race_line(&self, member: &Option<String>, mine: i64, rate: f64) -> Option<String> {
-        let mut ranked = self.others(member);
-        if member.is_none() || ranked.is_empty() { return None; }
-        ranked.sort_by(|a, b| b.score.cmp(&a.score));
-        if let Some(ahead) = ranked.iter().filter(|f| f.score >= mine).last() {
-            let gap = (ahead.score - mine) as f64 / rate;
-            return Some(format!("{} to beat {}", minutes(gap + 60.0), short(&ahead.name)));
+    /// The only thing shown about the race today: who is working right now. Never a time or a gap.
+    pub fn race_line(&self, member: &Option<String>) -> Option<String> {
+        if member.is_none() { return None; }
+        let on: Vec<Friend> = self.others(member).into_iter().filter(|f| f.focusing).collect();
+        match on.len() {
+            0 => None,
+            1 => Some(format!("{} is on the clock", short(&on[0].name))),
+            n => Some(format!("{n} friends on the clock")),
         }
-        // Leading only means something against someone who's actually started, and when it's close.
-        let second = ranked.iter().find(|f| !(f.due_min.is_some() && f.in_min.is_none()))?;
-        if mine - second.score > 30 * 60 { return None; }
-        Some(format!("Leading {} by {}", short(&second.name), minutes((mine - second.score) as f64)))
     }
 
-    pub fn leading(&self, member: &Option<String>, mine: i64) -> bool {
-        let o = self.others(member);
-        !o.is_empty() && o.iter().all(|f| mine > f.score)
+    pub fn won_yesterday(&self, member: &Option<String>) -> bool {
+        member.as_ref().map(|m| self.champions().contains(&m.to_lowercase())).unwrap_or(false)
     }
 
     /// Each unseen taunt pops up right away, as long as I'm at the computer.

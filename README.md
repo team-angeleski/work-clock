@@ -4,7 +4,7 @@ Your little focus buddy (formerly Work Clock).
 
 A focus clock that sits next to your Mac's Dock. Pick the apps (or browser sites) you work in, click to start, and it only counts time while you're actually in them.
 
-Race your friends: the board ranks today's focus score, and whoever wins the day gets three taunts that pop up on everyone else's screen.
+Race your friends, blind: during the day you only see who is on the clock right now, never anyone's time, so nobody gives up for being behind. The next day the result is revealed, and the winner gets three taunts that pop up on everyone else's screen.
 
 ## Install
 
@@ -70,10 +70,10 @@ Small pushes back to work, all as Mac notifications plus a shake of the clock:
 
 - **Drifting:** on a distraction site mid-session, the clock shakes at 20s and 60s and notifies you at 2 minutes. In any other non-work app: a shake at 90s, a notification at 5 minutes. Idle time never nags.
 - **Mornings:** YouTube and Instagram close on sight until 2 hours of focus, and while the clock runs.
-- **Not started:** at your Mac for 15 minutes without starting, you get your rank and the race. Again at 90 minutes.
+- **Not started:** at your Mac for 15 minutes without starting, you get your rank and who is on the clock. Again at 90 minutes.
 - **Friends:** a notification within seconds when a friend starts working (once per 20 minutes per friend), when someone overtakes you, and when you take the lead. Taunts pop up straight away.
 - **Streak at risk:** at 8pm, if your goal isn't hit and you have a streak going.
-- **Recap:** at 9pm, today's time, rank, the race and tomorrow's goal.
+- **Recap:** at 9pm, today's time, rank and tomorrow's goal.
 
 Click the clock, click the apps you'll work in, click the clock again. Tap twice without picking to reuse last time's apps.
 

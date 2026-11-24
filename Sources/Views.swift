@@ -38,7 +38,7 @@ struct PillView: View {
                             .font(.system(size: h * 0.33, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .foregroundStyle(titleStyle)
-                        if board.leading {
+                        if board.wonYesterday {
                             Image(systemName: "crown.fill")
                                 .font(.system(size: h * 0.17, weight: .bold))
                                 .foregroundStyle(.yellow)
@@ -688,7 +688,10 @@ struct DetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Counted apps · today").font(.caption).foregroundStyle(.secondary)
             let times = Dictionary(store.todaySegmentsByApp.map { ($0.app, $0.time) }, uniquingKeysWith: +)
-            let ids = store.picked + times.keys.filter { !store.picked.contains($0) }.sorted()
+            // Your picked apps, then the biggest of the rest: seven rows at most, so the panel stays short.
+            let rest = times.keys.filter { !store.picked.contains($0) }.sorted { (times[$0] ?? 0) > (times[$1] ?? 0) }
+            let all = store.picked + rest
+            let ids = Array(all.prefix(max(7, store.picked.count)))
             ForEach(ids, id: \.self) { id in
                 HStack(spacing: 8) {
                     Image(nsImage: store.icon(id)).resizable().frame(width: 18, height: 18)
@@ -701,6 +704,10 @@ struct DetailView: View {
                     }
                 }
                 .font(.callout)
+            }
+            if all.count > ids.count {
+                let more = all.dropFirst(ids.count).reduce(0.0) { $0 + (times[$1] ?? 0) }
+                Text("+ \(all.count - ids.count) more · \(long(more))").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -720,31 +727,29 @@ struct FriendsMini: View {
                 HStack {
                     Text("Today's race").font(.headline)
                     Spacer()
-                    if let line = board.raceLine {
-                        Text(line).font(.caption.weight(.semibold)).foregroundStyle(board.leading ? .green : .orange)
-                    }
+                    Label("Sealed till tomorrow", systemImage: "lock.fill")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 }
-                ForEach(Array(board.ranked.enumerated()), id: \.element.id) { i, f in
-                    FriendRow(board: board, rank: i + 1, friend: f, compact: true)
+                ForEach(board.lineup) { f in
+                    FriendRow(board: board, friend: f, compact: true)
                 }
+                YesterdayResult(board: board, compact: true)
             }
         }
     }
 }
 
+/// One person in today's blind race: who they are and whether they're working right now.
+/// Never their time today: that's sealed until tomorrow. Your own time is yours to see.
 struct FriendRow: View {
     let board: Board
-    let rank: Int
     let friend: Friend
     var compact = false
 
     var body: some View {
         let me = friend.id == board.memberID
         HStack(spacing: 8) {
-            Text("\(rank)").font(.system(.callout, design: .rounded).weight(.heavy)).frame(width: 16)
-                .foregroundStyle(rank == 1 ? .yellow : .secondary)
-            Circle().fill(friend.focusing ? Color.green : Color.secondary.opacity(0.3)).frame(width: 7, height: 7)
-                .help(friend.focusing ? "Focusing right now" : "Not focusing right now")
+            Circle().fill(friend.focusing ? Color.green : Color.secondary.opacity(0.3)).frame(width: 8, height: 8)
             Text(me ? "You" : friend.name).fontWeight(me ? .bold : .regular).lineLimit(1)
             if let c = friend.costume {
                 Text(c.badge).help(friend.characterTitle ?? c.name)
@@ -760,29 +765,44 @@ struct FriendRow: View {
                 Label("\(friend.streak)", systemImage: "flame.fill").font(.caption2).foregroundStyle(.orange)
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 0) {
+            if me {
                 Text(long(Double(friend.score))).monospacedDigit().fontWeight(.semibold)
-                if !compact {
-                    Text("\(long(Double(friend.today))) focus · \(long(Double(friend.week)))/wk")
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
-                if let status = clockStatus {
-                    Text(status.text).font(.caption2.weight(.semibold)).foregroundStyle(status.color)
-                }
+            } else {
+                Text(friend.focusing ? "On the clock" : "Off the clock")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(friend.focusing ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
             }
         }
         .font(.callout)
     }
+}
 
-    /// "in 8:52am", "in 9:40am · −35", "late 23m · −23", or "due 9:00am".
-    private var clockStatus: (text: String, color: Color)? {
-        guard let due = friend.due_min else { return nil }
-        let late = friend.late ?? 0
-        if let inAt = friend.in_min {
-            return late > 0 ? ("in \(Office.text(inAt)) · −\(late)", .orange) : ("in \(Office.text(inAt))", .green)
+/// Yesterday's sealed scores, revealed.
+struct YesterdayResult: View {
+    let board: Board
+    var compact = false
+
+    var body: some View {
+        let result = board.yesterdayResult
+        if !result.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Yesterday's result").font(.caption).foregroundStyle(.secondary)
+                ForEach(result) { f in
+                    HStack(spacing: 6) {
+                        Image(systemName: "crown.fill").font(.caption2)
+                            .foregroundStyle(board.champions.contains(f.id) ? AnyShapeStyle(.yellow) : AnyShapeStyle(.clear))
+                        Text(f.id == board.memberID ? "You" : f.name)
+                            .fontWeight(board.champions.contains(f.id) ? .semibold : .regular)
+                        Spacer()
+                        Text(long(Double(f.yesterday))).monospacedDigit()
+                            .foregroundStyle(board.champions.contains(f.id) ? .primary : .secondary)
+                    }
+                    .font(compact ? .caption : .callout)
+                }
+            }
+            .padding(compact ? 0 : 10)
+            .background(RoundedRectangle(cornerRadius: 10).fill(.primary.opacity(compact ? 0 : 0.05)))
         }
-        if late > 0 { return ("late \(late)m · −\(late)", .red) }
-        return compact ? nil : ("due \(Office.text(due))", .secondary)
     }
 }
 
@@ -829,14 +849,19 @@ struct FriendsSection: View {
                 Text("Just you so far. Copy the invite and send it to a friend; they paste it into Terminal and they're in.")
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-            } else if let line = board.raceLine {
-                Text(line)
-                    .font(.system(.title3, design: .rounded).weight(.heavy))
-                    .foregroundStyle(board.leading ? AnyShapeStyle(.green.gradient) : AnyShapeStyle(.orange.gradient))
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(board.raceLine ?? "Today's race is on")
+                        .font(.system(.title3, design: .rounded).weight(.heavy))
+                        .foregroundStyle(board.raceLine != nil ? AnyShapeStyle(.green.gradient) : AnyShapeStyle(.orange.gradient))
+                    Label("Scores are sealed. The winner is revealed tomorrow.", systemImage: "lock.fill")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
-            ForEach(Array(board.ranked.enumerated()), id: \.element.id) { i, f in
-                FriendRow(board: board, rank: i + 1, friend: f)
+            ForEach(board.lineup) { f in
+                FriendRow(board: board, friend: f)
             }
+            YesterdayResult(board: board)
             if board.canPickCostume { CharacterPicker(board: board) }
             if board.tauntsLeft > 0 && !board.others.isEmpty { tauntBox } else if board.friends.count > 1 {
                 Label(Costume.enabled ? "Win today: 3 taunts and unlock a legend" : "Win today to earn 3 taunts for tomorrow", systemImage: "crown")

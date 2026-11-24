@@ -198,7 +198,7 @@ struct SetupView: View {
             VStack(alignment: .leading, spacing: 18) {
                 feature("cursorarrow.click.2", .blue, "Pick, then focus", "Click the clock, click the apps you work in, then click it again to start.")
                 feature("eye.fill", .orange, "Only real work counts", "Drift to YouTube and it stops, and gives you a nudge back.")
-                feature("trophy.fill", .yellow, "Race your friends", "Win the day and you get three taunts that pop up on their screens.")
+                feature("trophy.fill", .yellow, "Race your friends, blind", "Today's times stay sealed. The winner is revealed tomorrow and gets three taunts.")
                 feature("lock.fill", .indigo, "No scrolling first", "YouTube and Instagram stay closed until you've done 2 hours of focus, and while the clock runs.")
             }
         }

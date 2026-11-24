@@ -3,6 +3,8 @@ import Observation
 
 // MARK: Friend board
 // A private race between up to 5 friends, ranked by focus score (focus time plus bonuses).
+// The race is blind: today's times stay sealed, so nobody gives up for being behind. All you
+// see during the day is who is on the clock right now. The result is revealed the next day.
 // Yesterday's winner gets 3 taunts: messages that pop up on friends' screens at random moments.
 // The server checks every number: focus can't grow faster than real time, and only
 // yesterday's real winner can send taunts.
@@ -156,7 +158,6 @@ final class Board {
     @ObservationIgnored private var queue: [Taunt] = []
     @ObservationIgnored private var lastSyncAttempt = Date.distantPast
     @ObservationIgnored private var announcedDay = ""
-    @ObservationIgnored private var lastLead: Bool?
 
     private let base = URL(string: "https://kjjhpstxwwldjlskefrr.supabase.co/rest/v1/rpc/")!
     private let key: String = Bundle.main.url(forResource: "anon", withExtension: "key")
@@ -182,32 +183,33 @@ final class Board {
 
     // MARK: The race
 
-    /// "15m to beat Cung", "Leading Cung by 20m", or nil when alone or the lead says nothing.
+    /// The only thing shown about the race today: who is working right now. Never a time or a gap.
     var raceLine: String? {
-        guard let store, joined, !others.isEmpty else { return nil }
-        let mine = myScore
-        let rate = store.scoreRate
-        let ranked = others.sorted { $0.score > $1.score }
-        if let ahead = ranked.filter({ $0.score >= mine }).last {
-            let gap = Double(ahead.score - mine) / rate
-            return "\(minutes(gap + 60)) to beat \(short(ahead.name))"
-        }
-        // Leading only means something against someone who's actually started, and when it's close.
-        guard let second = ranked.first(where: { !($0.due_min != nil && $0.in_min == nil) }),
-              mine - second.score <= 30 * 60 else { return nil }
-        return "Leading \(short(second.name)) by \(minutes(Double(mine - second.score)))"
+        guard joined else { return nil }
+        let on = others.filter(\.focusing)
+        guard let first = on.first else { return nil }
+        return on.count > 1 ? "\(on.count) friends on the clock" : "\(short(first.name)) is on the clock"
     }
 
-    var leading: Bool { others.allSatisfy { myScore > $0.score } && !others.isEmpty }
+    /// Me first, then friends by name: an order that gives nothing away.
+    var lineup: [Friend] {
+        ranked.sorted { a, b in
+            if (a.id == memberID) != (b.id == memberID) { return a.id == memberID }
+            return a.name < b.name
+        }
+    }
+
+    /// Yesterday's final scores, best first. Empty until someone has a real result.
+    var yesterdayResult: [Friend] {
+        guard friends.count > 1, !champions.isEmpty else { return [] }
+        return friends.sorted { $0.yesterday != $1.yesterday ? $0.yesterday > $1.yesterday : $0.name < $1.name }
+    }
+
+    var wonYesterday: Bool { memberID.map(champions.contains) ?? false }
 
     private func short(_ name: String) -> String {
         let first = name.split(separator: " ").first.map(String.init) ?? name
         return first.count > 9 ? String(first.prefix(8)) + "…" : first
-    }
-
-    private func minutes(_ seconds: Double) -> String {
-        let m = max(1, Int((seconds / 60).rounded(.up)))
-        return m >= 60 ? "\(m / 60)h \(m % 60)m" : "\(m)m"
     }
 
     // MARK: Actions
@@ -395,13 +397,13 @@ final class Board {
     /// A friend just started working: tell me straight away.
     private func friendStarted(_ name: String, today: Int) {
         guard let store else { return }
-        let theirs = long(Double(today))
+        // No times: today's scores are sealed until tomorrow.
         if store.mode == .running {
-            notify("\(name) started too", "They're on \(theirs) today. You're on \(long(store.today)). Keep going.")
+            notify("\(name) started too", "You're both on the clock. Scores are sealed until tomorrow. Keep going.")
             store.announce("\(short(name)) started too", sound: "Pop", seconds: 5)
         } else {
-            notify("\(name) just started working", "They're on \(theirs) today. You're on \(long(store.today)). Your move.")
-            store.announce("\(short(name)) started. Your move", sound: "Funk", seconds: 6)
+            notify("\(name) just started working", "They're on the clock and you're not. Scores are sealed until tomorrow. Your move.")
+            store.announce("\(short(name)) is on the clock. Your move", sound: "Funk", seconds: 6)
         }
         nudge()   // fresh race numbers
     }
@@ -442,7 +444,6 @@ final class Board {
             schedule(s.incoming)
             onSynced?()
             announceDay()
-            announceLeadChange()
         } catch let e as BoardError where e.text == "Not a member of this board" {
             forget()
             self.error = "You were removed from the board"
@@ -459,28 +460,19 @@ final class Board {
         guard !champs.isEmpty else { return }
         announcedDay = today
         defaults.set(today, forKey: "boardAnnouncedDay")
+        // The reveal: yesterday's sealed scores, out in the open.
+        let result = yesterdayResult
+        let myTime = long(Double(me?.yesterday ?? 0))
         if champs.contains(mine) {
-            store?.announce("You won yesterday! \(tauntsLeft) taunts ready", sound: "Hero", seconds: 6)
-            notify("You won yesterday 👑", "You've got \(tauntsLeft) taunts to send. Right-click your clock.")
-        } else if let winner = friends.first(where: { champs.contains($0.id) }) {
-            store?.announce("\(winner.name) won yesterday. Brace yourself.", sound: "Funk", seconds: 6)
-            notify("\(winner.name) won yesterday", "Taunts incoming. Win today to get your revenge.")
+            let second = result.first { $0.id != mine }
+            let versus = second.map { " \(myTime) to \(short($0.name))'s \(long(Double($0.yesterday)))." } ?? ""
+            store?.announce("You won yesterday!\(versus) \(tauntsLeft) taunts ready", sound: "Hero", seconds: 10)
+            notify("You won yesterday 👑", "\(versus.trimmingCharacters(in: .whitespaces)) You've got \(tauntsLeft) taunts to send. Right-click your clock.")
+        } else if let winner = result.first {
+            let versus = "\(long(Double(winner.yesterday))) to your \(myTime)"
+            store?.announce("\(short(winner.name)) won yesterday: \(versus). Today's a fresh race.", sound: "Funk", seconds: 10)
+            notify("\(winner.name) won yesterday", "\(versus). Taunts incoming. Today's scores are sealed, so it's anyone's.")
         }
-    }
-
-    private func announceLeadChange() {
-        guard !others.isEmpty, let store, store.today > 300 else { return }
-        let now = leading
-        if let before = lastLead, before != now {
-            if now {
-                store.announce("You took the lead!", sound: "Glass")
-                notify("You took the lead 👑", raceLine ?? "Keep going")
-            } else if let top = others.max(by: { $0.score < $1.score }) {
-                store.announce("\(top.name) overtook you", sound: "Basso")
-                notify("\(top.name) overtook you", raceLine.map { "\($0). Get back to it." } ?? "Get back to it.")
-            }
-        }
-        lastLead = now
     }
 
     // MARK: Taunts popping up

@@ -249,13 +249,18 @@ onState(s => {
   $("#raceCard").classList.toggle("hidden", !b.joined);
   $("#inviteCard").classList.toggle("hidden", !b.joined);
   $("#raceTitle").textContent = b.race ? `Today's race · ${b.race}` : "Today's race";
-  $("#friends").innerHTML = b.friends.map((f, i) => `
+  // Blind race: who's on the clock, never their time. Your own time is yours to see.
+  $("#friends").innerHTML = (b.friends.map(f => `
     <div class="friend ${f.me ? "me" : ""}">
-      <div class="pos">${f.champion ? "👑" : i + 1}</div>
+      <div class="pos">${f.champion ? "👑" : ""}</div>
       <div class="who"><b>${esc(f.name)}${f.me ? " (you)" : ""}</b>${charBadge(f)}${f.focusing ? '<span class="dot" title="Focusing now"></span>' : ""}
-        <small>${charTitle(f) ? `${esc(charTitle(f))} · ` : ""}${f.today} focused · Lv ${f.level}${f.streak ? ` · 🔥${f.streak}` : ""}${f.late ? ` · <span class="late">${f.late}m late</span>` : f.in ? ` · in ${f.in}` : f.due ? ` · due ${f.due}` : ""}</small></div>
-      <div class="score">${f.scoreText}</div>
-    </div>`).join("") || `<div class="dim">Just you so far. Invite a friend below.</div>`;
+        <small>${charTitle(f) ? `${esc(charTitle(f))} · ` : ""}Lv ${f.level}${f.streak ? ` · 🔥${f.streak}` : ""}</small></div>
+      <div class="score">${f.me ? f.scoreText : f.focusing ? "On the clock" : `<span class="dim">Off the clock</span>`}</div>
+    </div>`).join("") || `<div class="dim">Just you so far. Invite a friend below.</div>`)
+    + (b.friends.length > 1 ? `<div class="faint" style="font-size:11px;margin-top:6px">🔒 Scores are sealed. The winner is revealed tomorrow.</div>` : "")
+    + (b.friends.length > 1 && b.friends.some(f => f.champion) ? `<div class="faint" style="font-size:11px;margin-top:10px">Yesterday's result</div>`
+      + [...b.friends].sort((x, y) => y.yesterday - x.yesterday).map(f => `
+    <div class="friend"><div class="pos">${f.champion ? "👑" : ""}</div><div class="who">${esc(f.name)}${f.me ? " (you)" : ""}</div><div class="score">${f.yesterdayText}</div></div>`).join("") : "");
   // Yesterday's winner picks today's character.
   const picking = CHARACTERS_ENABLED && b.joined && b.canPick;
   $("#pickCard").classList.toggle("hidden", !picking);
